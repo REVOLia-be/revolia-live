@@ -1,0 +1,40 @@
+/* Thème REVOLia — source unique des couleurs et polices (manuel de marque Studio Pepper). */
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/poppins-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/poppins-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/poppins-latin-700-normal.woff2') format('woff2');
+}
+
+:root {
+  --couleur-vert: #00824d;
+  --couleur-vert-fonce: #004d3d;
+  /* Vert clair : accent sur fond foncé uniquement, jamais en fond. */
+  --couleur-vert-clair: #80bf9e;
+  --couleur-bleu-violet: #030159;
+  --couleur-blanc: #ffffff;
+
+  /* Titres : iBrand dès que les fichiers arrivent, repli Poppins 700. */
+  --police-titre: 'Poppins', system-ui, sans-serif;
+  --police-texte: 'Poppins', system-ui, sans-serif;
+
+  --rayon-pilule: 9999px;
+  --rayon-carte: 1.25rem;
+  --rayon-champ: 1rem;
+}
