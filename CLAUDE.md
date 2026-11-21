@@ -23,7 +23,7 @@ JF (formateur, propriétaire du produit). Il n'est pas développeur : explique l
 | | |
 |---|---|
 | Front | Vite + React + TypeScript + Tailwind CSS |
-| Hébergement | Cloudflare Pages (site statique) |
+| Hébergement | Cloudflare Workers, fichiers statiques (`wrangler.jsonc`) |
 | Données, temps réel, auth | Supabase, région Frankfurt |
 | Formateur | Supabase Auth, lien magique |
 | Participants | Supabase **anonymous sign-in** (identité invisible, permet la reconnexion) |
