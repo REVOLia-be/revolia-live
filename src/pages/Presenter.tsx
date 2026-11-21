@@ -7,6 +7,8 @@ import EcranAttente from '../composants/presentateur/EcranAttente'
 import EcranBilan from '../composants/presentateur/EcranBilan'
 import EcranQuestion from '../composants/presentateur/EcranQuestion'
 import EcranResultats from '../composants/presentateur/EcranResultats'
+import MenuModeration from '../composants/presentateur/MenuModeration'
+import { ConnexionPerdueContext } from '../composants/presentateur/ZonesEcran'
 import { appelerRpc } from '../lib/api'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
@@ -123,19 +125,14 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
     )
   }
 
-  const haut = (
-    <>
-      <JaugeCollective jauge={etat.jauge} variante="grande" />
-      {connexionPerdue && (
-        <p role="status" className="mt-1 text-[clamp(0.8rem,1.2vw,1.2rem)] opacity-80">
-          Connexion perdue. On réessaie…
-        </p>
-      )}
-    </>
-  )
+  // Pendant le bilan, la jauge est montrée en grand dans le bilan lui-même : pas de doublon en haut.
+  const enBilan = etat.etat === 'bilan' || etat.etat === 'terminee'
+  const haut = enBilan ? undefined : <JaugeCollective jauge={etat.jauge} variante="grande" />
 
   return (
+    <ConnexionPerdueContext.Provider value={connexionPerdue}>
     <MiseEnPagePresentateur haut={haut} plein>
+      <MenuModeration participants={participants} onExclure={exclure} />
       {etat.etat === 'attente' && (
         <EcranAttente
           etat={etat}
@@ -164,5 +161,6 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
         <EcranBilan etat={etat} enCours={enCours} erreur={erreurAction} onTerminer={() => piloter('terminer_session')} />
       )}
     </MiseEnPagePresentateur>
+    </ConnexionPerdueContext.Provider>
   )
 }

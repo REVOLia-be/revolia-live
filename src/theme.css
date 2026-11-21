@@ -36,6 +36,9 @@
   --couleur-vert-clair: #80bf9e;
   --couleur-bleu-violet: #030159;
   --couleur-blanc: #ffffff;
+  /* Variantes atténuées du vert foncé (Tailwind ne sait pas appliquer « /60 » à une variable CSS). */
+  --couleur-discret: color-mix(in srgb, var(--couleur-vert-fonce) 65%, var(--couleur-blanc)); /* exemples, textes secondaires : ≥ 3,4:1 sur blanc */
+  --couleur-inactif: color-mix(in srgb, var(--couleur-vert-fonce) 80%, var(--couleur-blanc)); /* boutons désactivés lisibles */
 
   /* Titres : iBrand (une seule graisse, toujours en font-weight 400), repli Poppins. */
   --police-titre: 'iBrand', 'Poppins', system-ui, sans-serif;

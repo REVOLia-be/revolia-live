@@ -10,6 +10,14 @@
   h1, h2, h3 {
     @apply font-titre font-normal;
   }
+  /* Un seul style de focus pour toute l'appli : anneau vert foncé de 3 px (blanc sur l'écran projeté). */
+  :focus-visible {
+    outline: 3px solid var(--couleur-vert-fonce);
+    outline-offset: 2px;
+  }
+  .ecran-projete :focus-visible {
+    outline-color: var(--couleur-blanc);
+  }
 }
 
 /* Animations de l'écran présentateur (nuage de mots, cartes, confettis). */
@@ -24,4 +32,11 @@
 @layer utilities {
   .animation-apparition { animation: apparition 0.6s ease-out both; }
   .animation-confetti { animation: chute-confetti linear forwards; }
+}
+
+/* « Moins d'animations » demandé par l'ordinateur : plus de confettis ni de rebonds. */
+@media (prefers-reduced-motion: reduce) {
+  .animation-confetti { display: none; }
+  .animation-apparition { animation: none; }
+  .animate-bounce, .animate-pulse { animation: none; }
 }

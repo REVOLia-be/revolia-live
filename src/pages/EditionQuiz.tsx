@@ -25,7 +25,7 @@ import { messageErreur } from '../lib/erreurs'
 import { supabase } from '../lib/supabase'
 
 const CHAMP =
-  'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg text-vertFonce placeholder:text-vertClair focus:outline-none focus:ring-4 focus:ring-vertClair'
+  'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg text-vertFonce placeholder:text-discret'
 
 export default function EditionQuiz() {
   const formateur = useFormateur()
@@ -78,6 +78,7 @@ function Editeur({ quizId }: { quizId: string }) {
   const [typeAjout, setTypeAjout] = useState<TypeQuestion>('qcm')
   const [confirmationSuppr, setConfirmationSuppr] = useState<string | null>(null)
   const [panneauIA, setPanneauIA] = useState(false) // panneau « Proposer des questions »
+  const [ouvertes, setOuvertes] = useState<string[]>([]) // questions dépliées (les autres sont repliées sur leur titre)
 
   const charger = useCallback(async () => {
     setChargement('en_cours')
@@ -182,8 +183,10 @@ function Editeur({ quizId }: { quizId: string }) {
   }
   function dupliquer(i: number) {
     const liste = [...courant.questions]
-    liste.splice(i + 1, 0, dupliquerQuestion(courant.questions[i]))
+    const copie = dupliquerQuestion(courant.questions[i])
+    liste.splice(i + 1, 0, copie)
     changer({ questions: liste })
+    setOuvertes((o) => [...o, copie.id])
   }
   function supprimer(i: number) {
     changer({ questions: courant.questions.filter((_, j) => j !== i) })
@@ -299,6 +302,23 @@ function Editeur({ quizId }: { quizId: string }) {
         </div>
       </Carte>
 
+      {panneauIA ? (
+        <PanneauPropositions
+          onAjouter={(qs) => {
+            changer({ questions: [...courant.questions, ...qs] })
+            setOuvertes((o) => [...o, ...qs.map((x) => x.id)])
+          }}
+          onFermer={() => setPanneauIA(false)}
+        />
+      ) : (
+        <Carte className="flex flex-col gap-3">
+          <p className="text-lg">Tu as un support de formation ? Claude peut te proposer des questions.</p>
+          <Bouton type="button" variante="secondaire" onClick={() => setPanneauIA(true)}>
+            ✨ Proposer des questions à partir d'un PDF
+          </Bouton>
+        </Carte>
+      )}
+
       <h2 className="text-2xl">
         Questions ({nb})
       </h2>
@@ -307,35 +327,60 @@ function Editeur({ quizId }: { quizId: string }) {
           <p className="text-lg">Ce quiz n'a pas encore de question. Ajoutes-en une ci-dessous.</p>
         </Carte>
       )}
-      {courant.questions.map((q, i) => (
-        <div key={q.id} className="flex flex-col gap-2">
-          <EditeurQuestion
-            numero={i + 1}
-            total={nb}
-            question={q}
-            erreurs={valid.questions[i]}
-            afficherErreurs={afficherErreurs}
-            onChange={(nq) => changerQuestion(i, nq)}
-            onMonter={() => deplacer(i, -1)}
-            onDescendre={() => deplacer(i, 1)}
-            onDupliquer={() => dupliquer(i)}
-            onSupprimer={() => setConfirmationSuppr(q.id)}
-          />
-          {confirmationSuppr === q.id && (
-            <Carte className="flex flex-col gap-3">
-              <p className="text-lg font-semibold">Supprimer la question {i + 1} ?</p>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Bouton type="button" onClick={() => supprimer(i)}>
-                  Oui, supprimer
-                </Bouton>
-                <Bouton type="button" variante="secondaire" onClick={() => setConfirmationSuppr(null)}>
-                  Non, garder
-                </Bouton>
-              </div>
-            </Carte>
-          )}
-        </div>
-      ))}
+      {courant.questions.map((q, i) => {
+        const aDesErreurs = afficherErreurs && Object.values(valid.questions[i] ?? {}).some(Boolean)
+        const depliee = ouvertes.includes(q.id) || aDesErreurs
+        const libelleType = TYPES.find((t) => t.valeur === q.type)?.libelle ?? ''
+        return (
+          <div key={q.id} className="flex flex-col gap-2">
+            {depliee ? (
+              <EditeurQuestion
+                numero={i + 1}
+                total={nb}
+                question={q}
+                erreurs={valid.questions[i]}
+                afficherErreurs={afficherErreurs}
+                onChange={(nq) => changerQuestion(i, nq)}
+                onMonter={() => deplacer(i, -1)}
+                onDescendre={() => deplacer(i, 1)}
+                onDupliquer={() => dupliquer(i)}
+                onSupprimer={() => setConfirmationSuppr(q.id)}
+                onReplier={aDesErreurs ? undefined : () => setOuvertes((o) => o.filter((x) => x !== q.id))}
+              />
+            ) : (
+              <Carte className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-base">
+                    Question {i + 1} · {libelleType}
+                  </p>
+                  <p className="truncate text-lg font-semibold">{q.enonce.trim() || 'Question sans texte'}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-expanded="false"
+                  onClick={() => setOuvertes((o) => [...o, q.id])}
+                  className="min-h-[44px] shrink-0 rounded-pilule border-2 border-vert px-4 text-base font-semibold text-vert hover:bg-vert hover:text-blanc"
+                >
+                  Ouvrir
+                </button>
+              </Carte>
+            )}
+            {confirmationSuppr === q.id && (
+              <Carte className="flex flex-col gap-3">
+                <p className="text-lg font-semibold">Supprimer la question {i + 1} ?</p>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Bouton type="button" onClick={() => supprimer(i)}>
+                    Oui, supprimer
+                  </Bouton>
+                  <Bouton type="button" variante="secondaire" onClick={() => setConfirmationSuppr(null)}>
+                    Non, garder
+                  </Bouton>
+                </div>
+              </Carte>
+            )}
+          </div>
+        )
+      })}
 
       <Carte className="flex flex-col gap-3">
         <label className="text-base font-semibold" htmlFor="type-ajout">
@@ -353,24 +398,14 @@ function Editeur({ quizId }: { quizId: string }) {
             </option>
           ))}
         </select>
-        <Bouton type="button" variante="secondaire" onClick={() => changer({ questions: [...courant.questions, nouvelleQuestion(typeAjout)] })}>
+        <Bouton type="button" variante="secondaire" onClick={() => {
+            const nouvelle = nouvelleQuestion(typeAjout)
+            changer({ questions: [...courant.questions, nouvelle] })
+            setOuvertes((o) => [...o, nouvelle.id])
+          }}>
           + Ajouter cette question
         </Bouton>
       </Carte>
-
-      {panneauIA ? (
-        <PanneauPropositions
-          onAjouter={(qs) => changer({ questions: [...courant.questions, ...qs] })}
-          onFermer={() => setPanneauIA(false)}
-        />
-      ) : (
-        <Carte className="flex flex-col gap-3">
-          <p className="text-lg">Tu as un support de formation ? Claude peut te proposer des questions.</p>
-          <Bouton type="button" variante="secondaire" onClick={() => setPanneauIA(true)}>
-            ✨ Proposer des questions à partir d'un PDF
-          </Bouton>
-        </Carte>
-      )}
 
       <Carte>
         <h2 className="mb-3 text-2xl">Lancer ce quiz en direct</h2>

@@ -8,7 +8,7 @@ import {
 } from './modele'
 
 const CHAMP =
-  'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg text-vertFonce placeholder:text-vertClair focus:outline-none focus:ring-4 focus:ring-vertClair'
+  'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg text-vertFonce placeholder:text-discret'
 const PETIT_BOUTON =
   'min-h-[40px] rounded-pilule border-2 border-vert bg-blanc px-4 text-base font-semibold text-vert transition-colors hover:bg-vert hover:text-blanc disabled:opacity-40 disabled:hover:bg-blanc disabled:hover:text-vert'
 
@@ -32,6 +32,7 @@ export default function EditeurQuestion({
   onDescendre,
   onDupliquer,
   onSupprimer,
+  onReplier,
 }: {
   numero: number
   total: number
@@ -43,6 +44,7 @@ export default function EditeurQuestion({
   onDescendre: () => void
   onDupliquer: () => void
   onSupprimer: () => void
+  onReplier?: () => void
 }) {
   const err = afficherErreurs ? erreurs : {}
   const libelleType = TYPES.find((t) => t.valeur === question.type)?.libelle ?? ''
@@ -84,6 +86,11 @@ export default function EditeurQuestion({
           <button type="button" className={PETIT_BOUTON} onClick={onSupprimer}>
             Supprimer
           </button>
+          {onReplier && (
+            <button type="button" className={PETIT_BOUTON} onClick={onReplier} aria-expanded="true">
+              Replier
+            </button>
+          )}
         </div>
       </div>
 
@@ -221,8 +228,8 @@ function Apercu({ question }: { question: QuestionEdition }) {
               {c.trim() || `Proposition ${i + 1}`}
             </div>
           ))}
-        {question.type === 'nuage' && <div className={`${cases} text-vertClair`}>Un mot ou une expression courte…</div>}
-        {question.type === 'ouverte' && <div className={`${cases} min-h-[88px] items-start py-2 text-vertClair`}>Ta réponse…</div>}
+        {question.type === 'nuage' && <div className={`${cases} text-discret`}>Un mot ou une expression courte…</div>}
+        {question.type === 'ouverte' && <div className={`${cases} min-h-[88px] items-start py-2 text-discret`}>Ta réponse…</div>}
         {question.type === 'echelle' && (
           <>
             <div className="flex gap-2">

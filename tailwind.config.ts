@@ -11,6 +11,8 @@ export default {
         vertClair: 'var(--couleur-vert-clair)',
         bleuViolet: 'var(--couleur-bleu-violet)',
         blanc: 'var(--couleur-blanc)',
+        discret: 'var(--couleur-discret)',
+        inactif: 'var(--couleur-inactif)',
       },
       fontFamily: {
         titre: 'var(--police-titre)',

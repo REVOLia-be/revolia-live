@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { exporterSession } from '../../lib/exporter'
+import { messageErreur } from '../../lib/erreurs'
 import Bouton from '../Bouton'
 import JaugeCollective from '../JaugeCollective'
 import Confettis from './Confettis'
@@ -15,7 +17,6 @@ const LIBELLES: Record<NomMention, string> = {
   plus_belle_progression: 'Plus belle progression',
   coup_de_coeur: 'Réponse coup de cœur',
 }
-const DELAI_AUTO_MS = 4000
 
 type Section = 'jauge' | 'chiffres' | 'nuage' | 'coeurs' | 'mentions'
 
@@ -42,36 +43,64 @@ export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props)
   // Si le formateur recharge la page sur un quiz terminé, on montre directement la fin.
   const [indice, setIndice] = useState(etat.etat === 'terminee' ? derniere : 0)
 
-  // Passage automatique à la section suivante toutes les 4 s (le bouton « Suite » accélère).
-  useEffect(() => {
-    if (indice >= derniere) return
-    const minuteur = window.setTimeout(() => setIndice((i) => i + 1), DELAI_AUTO_MS)
-    return () => window.clearTimeout(minuteur)
-  }, [indice, derniere])
+  // Pas de défilement automatique : le formateur commente à son rythme (Précédent / Suite).
+  const [exportEnCours, setExportEnCours] = useState(false)
+  const [erreurExport, setErreurExport] = useState<string | null>(null)
+  async function exporter() {
+    setExportEnCours(true)
+    setErreurExport(null)
+    try {
+      await exporterSession(etat.session_id, etat.titre)
+    } catch (e) {
+      setErreurExport(messageErreur(e))
+    } finally {
+      setExportEnCours(false)
+    }
+  }
 
   if (!bilan) return <p>Un instant…</p>
   const fini = indice >= derniere
   // `key` : chaque section rejoue son animation d'apparition.
   const section = sections[Math.min(indice, derniere)]
 
-  const pied = fini ? (
-    etat.etat === 'terminee' ? (
-      <Link to="/formateur" className="block w-full">
-        <Bouton type="button">Retour à mes quiz</Bouton>
-      </Link>
-    ) : (
-      <Bouton type="button" onClick={onTerminer} disabled={enCours}>
-        Terminer
+  const termine = fini && etat.etat === 'terminee'
+  const boutonPrecedent =
+    indice > 0 ? (
+      <Bouton type="button" variante="secondaire" onClick={() => setIndice((i) => Math.max(0, i - 1))}>
+        Précédent
       </Bouton>
-    )
-  ) : (
+    ) : null
+  const boutonSuite = !fini ? (
     <Bouton type="button" onClick={() => setIndice((i) => i + 1)}>
       Suite
     </Bouton>
+  ) : termine ? (
+    <Link to="/formateur" className="block w-full">
+      <Bouton type="button" variante="secondaire">
+        Retour à mes quiz
+      </Bouton>
+    </Link>
+  ) : (
+    <Bouton type="button" onClick={onTerminer} disabled={enCours}>
+      Terminer
+    </Bouton>
+  )
+  const pied = (
+    <div className="flex flex-col gap-[1vh]">
+      {termine && (
+        <Bouton type="button" onClick={() => void exporter()} disabled={exportEnCours}>
+          {exportEnCours ? 'Export en cours…' : 'Exporter les résultats (CSV)'}
+        </Bouton>
+      )}
+      <div className="flex gap-[1vw]">
+        {boutonPrecedent}
+        {boutonSuite}
+      </div>
+    </div>
   )
 
   return (
-    <ZonesEcran code={etat.code} erreur={erreur} pied={pied}>
+    <ZonesEcran erreur={erreur ?? erreurExport} pied={pied}>
       {fini && <Confettis />}
       <h1 className="shrink-0 text-[1.2em] leading-tight">{etat.etat === 'terminee' ? 'Quiz terminé. Merci à tous !' : 'Bilan de la salle'}</h1>
 

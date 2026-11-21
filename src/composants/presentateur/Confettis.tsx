@@ -16,7 +16,7 @@ export default function Confettis() {
     [],
   )
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       {pieces.map((p, i) => (
         <span
           key={i}

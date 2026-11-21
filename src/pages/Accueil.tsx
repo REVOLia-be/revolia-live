@@ -25,8 +25,8 @@ export default function Accueil() {
           autoComplete="off"
           inputMode="text"
           aria-label="Code du quiz"
-          placeholder="ABC123"
-          className="min-h-[72px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-center text-4xl font-bold uppercase tracking-[0.3em] text-vertFonce placeholder:text-vertClair focus:outline-none focus:ring-4 focus:ring-vertClair"
+          placeholder="Ex. K7M2QX"
+          className="min-h-[72px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-center text-4xl font-bold uppercase tracking-[0.3em] placeholder:text-2xl placeholder:font-normal placeholder:normal-case placeholder:tracking-normal text-vertFonce placeholder:text-discret"
         />
         <Bouton type="submit" disabled={code.length !== 6}>
           Rejoindre

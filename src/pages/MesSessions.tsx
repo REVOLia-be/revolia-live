@@ -5,7 +5,7 @@ import Carte from '../composants/Carte'
 import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import { useFormateur } from '../lib/auth'
-import { construireCsv, dateDuJour, simplifierTitre, telechargerCsv, type LigneExport } from '../lib/csv'
+import { exporterSession } from '../lib/exporter'
 import { messageErreur } from '../lib/erreurs'
 import { supabase } from '../lib/supabase'
 
@@ -16,6 +16,7 @@ interface LigneSession {
   etat: 'attente' | 'question' | 'resultats' | 'bilan' | 'terminee'
   cree_le: string
   terminee_le: string | null
+  nb_participants?: number | null
 }
 
 const LIBELLES_ETAT: Record<LigneSession['etat'], string> = {
@@ -80,11 +81,17 @@ function ListeSessions() {
     void (async () => {
       const { data, error } = await supabase
         .from('sessions')
-        .select('id, titre, code, etat, cree_le, terminee_le')
+        .select('id, titre, code, etat, cree_le, terminee_le, participants(count)')
         .order('cree_le', { ascending: false })
       if (!actif) return
       if (error) setErreur(messageErreur(error))
-      else setSessions((data ?? []) as LigneSession[])
+      else
+        setSessions(
+          ((data ?? []) as (LigneSession & { participants?: { count: number }[] })[]).map((l) => ({
+            ...l,
+            nb_participants: l.participants?.[0]?.count ?? null,
+          })),
+        )
     })()
     return () => {
       actif = false
@@ -95,11 +102,7 @@ function ListeSessions() {
     setExportEnCours(session.id)
     setErreur(null)
     try {
-      const { data, error } = await supabase.rpc('export_session', { p_session: session.id })
-      if (error) throw error
-      const lignes = (data ?? []) as LigneExport[]
-      const contenu = construireCsv(lignes)
-      telechargerCsv(contenu, `revolia-live-${simplifierTitre(session.titre)}-${dateDuJour()}.csv`)
+      await exporterSession(session.id, session.titre)
     } catch (e) {
       setErreur(messageErreur(e))
     } finally {
@@ -133,8 +136,12 @@ function ListeSessions() {
           <div>
             <h2 className="text-2xl">{s.titre}</h2>
             <p className="text-base">
-              Créée le {dateLisible(s.cree_le)} · {LIBELLES_ETAT[s.etat] ?? s.etat}
-              {s.terminee_le ? ` · terminée le ${dateLisible(s.terminee_le)}` : ''}
+              Créée le {dateLisible(s.cree_le)} ·{' '}
+              {s.terminee_le ? `Terminée le ${dateLisible(s.terminee_le)}` : (LIBELLES_ETAT[s.etat] ?? s.etat)}
+            </p>
+            <p className="text-base">
+              Code <span className="font-bold tracking-widest">{s.code}</span>
+              {s.nb_participants != null ? ` · ${s.nb_participants} participant${s.nb_participants > 1 ? 's' : ''}` : ''}
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">

@@ -16,7 +16,7 @@ export default function MiseEnPagePresentateur({
   plein?: boolean
 }) {
   return (
-    <div className={`flex w-screen flex-col bg-bleuViolet text-blanc ${plein ? 'h-dvh overflow-hidden' : 'min-h-dvh'}`}>
+    <div className={`ecran-projete flex w-screen flex-col bg-bleuViolet text-blanc ${plein ? 'h-dvh overflow-hidden' : 'min-h-dvh'}`}>
       <div className="shrink-0 px-[5vw] pt-[2vh]">
         <LogoMarque variante="clair" className="h-[max(1.25rem,3vh)] opacity-90" />
       </div>

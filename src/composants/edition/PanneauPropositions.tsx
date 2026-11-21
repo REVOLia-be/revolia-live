@@ -1,7 +1,7 @@
 // Panneau « Proposer des questions » : le formateur dépose un PDF (ou colle un texte),
 // Claude propose des questions, le formateur choisit celles qu'il ajoute à l'éditeur.
 // Rien n'est écrit en base ici : les questions ajoutées restent à relire puis à enregistrer.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Bouton from '../Bouton'
 import Carte from '../Carte'
 import { messageErreur } from '../../lib/erreurs'
@@ -46,7 +46,7 @@ interface Ligne {
 }
 
 const CHAMP =
-  'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg text-vertFonce placeholder:text-vertClair focus:outline-none focus:ring-4 focus:ring-vertClair'
+  'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg text-vertFonce placeholder:text-discret'
 
 // Proposition du serveur -> question de l'éditeur (non enregistrée, nouvel identifiant).
 function versEdition(p: Proposition): QuestionEdition {
@@ -118,6 +118,12 @@ export default function PanneauPropositions({ onAjouter, onFermer }: Props) {
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
   const [lignes, setLignes] = useState<Ligne[] | null>(null)
+  const attente = useRef<HTMLParagraphElement>(null)
+
+  // Le message d'attente prend la place du bouton : on s'assure qu'il est à l'écran.
+  useEffect(() => {
+    if (enCours) attente.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [enCours])
 
   function choisirFichier(f: File | null) {
     setErreur(null)
@@ -334,8 +340,8 @@ export default function PanneauPropositions({ onAjouter, onFermer }: Props) {
             </p>
           )}
           {enCours ? (
-            <p role="status" className="text-lg font-semibold">
-              Claude lit ton {source === 'pdf' ? 'document' : 'texte'}… Cela prend en général 30 à 60 secondes, ne ferme pas cette page.
+            <p ref={attente} role="status" className="rounded-champ border-4 border-vert bg-blanc p-4 text-xl font-semibold">
+              ⏳ Claude lit ton {source === 'pdf' ? 'document' : 'texte'}… Cela prend en général 30 à 60 secondes, ne ferme pas cette page.
             </p>
           ) : (
             <Bouton type="button" onClick={() => void proposer()}>

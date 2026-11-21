@@ -40,7 +40,12 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
 
   return (
     <ZonesEcran code={etat.code} erreur={erreur} pied={bouton}>
-      <h1 className="shrink-0 line-clamp-3 text-[0.95em] leading-tight">{question.enonce}</h1>
+      <div className="shrink-0">
+        <p className="text-[0.5em] font-semibold text-vertClair">
+          Question {question.ordre} sur {etat.nb_questions}
+        </p>
+        <h1 className="line-clamp-3 text-[0.95em] leading-tight">{question.enonce}</h1>
+      </div>
 
       {question.type === 'qcm' && resultats ? (
         <>
@@ -63,7 +68,7 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
                     </p>
                     <div className="mt-[0.3vh] h-[0.5em] overflow-hidden rounded-pilule border-2 border-blanc">
                       <div
-                        className={`h-full rounded-pilule transition-[width] duration-1000 ease-out ${bonne ? 'bg-vert' : 'bg-blanc/70'}`}
+                        className={`h-full rounded-pilule transition-[width] duration-1000 ease-out ${bonne ? 'bg-vert' : 'bg-blanc opacity-70'}`}
                         style={{ width: affiche ? `${part}%` : '0%' }}
                       />
                     </div>

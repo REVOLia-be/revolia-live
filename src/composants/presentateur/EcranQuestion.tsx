@@ -19,13 +19,20 @@ export default function EcranQuestion({ etat, secondes, enCours, erreur, onArret
       erreur={erreur}
       pied={
         <Bouton type="button" variante="secondaire" onClick={onArreter} disabled={enCours}>
-          Arrêter maintenant
+          Voir les résultats maintenant
         </Bouton>
       }
     >
       <div className="flex items-start justify-between gap-[3vw]">
-        <h1 className="line-clamp-3 text-[0.95em] leading-tight">{question.enonce}</h1>
+        <div className="min-w-0">
+          <p className="text-[0.5em] font-semibold text-vertClair">
+            Question {question.ordre} sur {etat.nb_questions}
+          </p>
+          <h1 className="line-clamp-3 text-[0.95em] leading-tight">{question.enonce}</h1>
+          <p className="mt-[0.5vh] text-[0.5em]">Réponds sur ton téléphone</p>
+        </div>
         <p
+          role="timer"
           aria-label="Secondes restantes"
           className="font-titre text-[2.6em] font-normal leading-none tabular-nums text-vertClair"
         >

@@ -1,9 +1,12 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 
 // Écran présentateur en zones fixes : contenu (qui se partage la hauteur) / pied de page fixe.
 // Le pied contient toujours le bouton de pilotage, et juste au-dessus : le message d'erreur
 // du dernier clic, dans un cadre bien visible. Le bouton ne sort donc jamais de l'écran.
+// Fourni par la page présentateur : vrai si le réseau est coupé.
+export const ConnexionPerdueContext = createContext(false)
+
 interface Props {
   children: ReactNode
   /** Bouton(s) de pilotage. */
@@ -15,12 +18,18 @@ interface Props {
 }
 
 export default function ZonesEcran({ children, pied, erreur, code }: Props) {
+  const connexionPerdue = useContext(ConnexionPerdueContext)
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[2vh]">
-      <div className="flex min-h-0 flex-1 flex-col gap-[2vh] overflow-hidden">{children}</div>
-      <footer className={`flex shrink-0 items-end gap-[3vw] text-[0.6em] ${code ? 'justify-between' : 'justify-center'}`}>
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-[2vh] overflow-hidden">{children}</div>
+      <footer className={`relative z-10 flex shrink-0 items-end gap-[3vw] text-[0.6em] ${code ? 'justify-between' : 'justify-center'}`}>
         {code && <RappelRejoindre code={code} />}
         <div className="flex w-full max-w-xl flex-col gap-[1vh]">
+          {connexionPerdue && (
+            <p role="status" className="rounded-carte border-4 border-blanc bg-bleuViolet px-[1.2vw] py-[1vh] text-[0.8em] font-semibold leading-snug">
+              Connexion perdue : tes participants peuvent ne plus recevoir les questions. On réessaie.
+            </p>
+          )}
           {erreur && (
             <p role="alert" className="rounded-carte border-4 border-vertClair bg-blanc px-[1.2vw] py-[1vh] text-[0.8em] font-semibold leading-snug text-bleuViolet">
               {erreur} Clique encore une fois.

@@ -50,7 +50,7 @@ export default function ConnexionFormateur() {
           autoComplete="email"
           aria-label="Ton adresse email"
           placeholder="prenom@exemple.be"
-          className="min-h-[56px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-xl text-vertFonce placeholder:text-vertClair focus:outline-none focus:ring-4 focus:ring-vertClair"
+          className="min-h-[56px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-xl text-vertFonce placeholder:text-discret"
         />
         {erreur && (
           <p role="alert" className="text-lg font-semibold">

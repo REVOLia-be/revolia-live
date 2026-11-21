@@ -20,7 +20,9 @@ function MurDeCartes({ resultats, onAction }: Pick<Props, 'resultats' | 'onActio
   const reponses = resultats.reponses ?? []
   if (reponses.length === 0) return <p className="text-vertClair">Aucune réponse cette fois.</p>
   return (
-    <ul className="grid max-h-full grid-cols-2 gap-[1.5vh] overflow-y-auto pr-[0.5vw] text-[0.6em] xl:grid-cols-3">
+    <div className="flex min-h-0 flex-col gap-[1vh]">
+      <p className="shrink-0 text-[0.5em] text-vertClair">Clique sur ♡ pour mettre une réponse à l'honneur au bilan</p>
+    <ul className="grid min-h-0 max-h-full grid-cols-2 gap-[1.5vh] overflow-y-auto pr-[0.5vw] text-[0.6em] xl:grid-cols-3">
       {reponses.map((r) => (
         <li
           key={r.id}
@@ -29,23 +31,23 @@ function MurDeCartes({ resultats, onAction }: Pick<Props, 'resultats' | 'onActio
           }`}
         >
           <p className="break-words">{r.texte}</p>
-          <div className="flex items-center justify-end gap-[1vw] text-[0.6em] opacity-60 transition-opacity hover:opacity-100">
+          <div className="flex items-center justify-end gap-[1vw] text-[0.7em]">
             <button
               type="button"
               onClick={() => onAction('basculer_coup_de_coeur', r.id)}
-              aria-label={r.coup_de_coeur ? 'Retirer le coup de cœur' : 'Coup de cœur'}
               aria-pressed={r.coup_de_coeur}
-              className="px-2 text-[1.6em] leading-none"
+              className="min-h-[44px] rounded-pilule border-2 border-current px-3 font-semibold"
             >
-              {r.coup_de_coeur ? '♥' : '♡'}
+              {r.coup_de_coeur ? '♥ Coup de cœur' : '♡ Coup de cœur'}
             </button>
-            <button type="button" onClick={() => onAction('masquer_reponse', r.id)} className="px-2 underline">
+            <button type="button" onClick={() => onAction('masquer_reponse', r.id)} className="min-h-[44px] px-3 font-semibold underline">
               Masquer
             </button>
           </div>
         </li>
       ))}
     </ul>
+    </div>
   )
 }
 

@@ -295,9 +295,14 @@ function CarteQuiz({
         <Bouton type="button" variante="secondaire" onClick={dupliquer} disabled={occupe}>
           Dupliquer
         </Bouton>
-        <Bouton type="button" variante="secondaire" onClick={() => setConfirmer(true)} disabled={occupe}>
+        <button
+          type="button"
+          onClick={() => setConfirmer(true)}
+          disabled={occupe}
+          className="min-h-[56px] px-4 text-base font-semibold text-vertFonce underline disabled:opacity-60 sm:ml-auto"
+        >
           Supprimer
-        </Bouton>
+        </button>
       </div>
       {confirmer && (
         <div className="flex flex-col gap-3 rounded-champ border-2 border-vert p-4">

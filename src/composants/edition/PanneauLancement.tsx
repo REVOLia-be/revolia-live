@@ -53,13 +53,14 @@ export default function PanneauLancement({
         />
         Mode par table
       </label>
+      <p className="-mt-2 text-base">Les participants choisissent leur table en arrivant. La salle garde une seule jauge : pas de comparaison entre tables.</p>
       {parTable && (
         <input
           value={noms}
           onChange={(e) => setNoms(e.target.value)}
           aria-label="Noms des tables, séparés par des virgules"
           placeholder="Noms des tables, séparés par des virgules (ex. Table 1, Table 2, Table 3)"
-          className="min-h-[56px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-lg text-vertFonce placeholder:text-vertClair focus:outline-none focus:ring-4 focus:ring-vertClair"
+          className="min-h-[56px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-lg text-vertFonce placeholder:text-discret"
         />
       )}
       {erreur && (
@@ -71,6 +72,7 @@ export default function PanneauLancement({
       <Bouton type="button" onClick={lancer} disabled={lancement || desactive}>
         {lancement ? 'Lancement…' : libelle}
       </Bouton>
+      <p className="text-base">Ouvre l'écran à projeter. Mets-le sur le vidéoprojecteur (F11 pour le plein écran).</p>
     </div>
   )
 }

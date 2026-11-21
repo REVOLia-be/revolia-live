@@ -65,6 +65,23 @@ function EcranProbleme({ message, onRetour }: { message: string; onRetour: () =>
 function Partie({ sessionId, code }: { sessionId: string; code: string }) {
   const navigate = useNavigate()
   const { etat, decalage, erreur, connexionPerdue, recharger } = useEtatSession(sessionId)
+  const enQuestion = etat?.etat === 'question' && etat.a_repondu !== true
+  const secondes = useSecondesRestantes(enQuestion ? etat?.question?.fin_reponses_le : undefined, decalage)
+
+  // Palier franchi : on prévient aussi les téléphones (pas au premier chargement).
+  const paliers = etat?.jauge.paliers_atteints
+  const precedent = useRef<number | null>(null)
+  const [palierCelebre, setPalierCelebre] = useState<number | null>(null)
+  useEffect(() => {
+    if (paliers === undefined) return
+    const avant = precedent.current
+    precedent.current = paliers
+    if (avant !== null && paliers > avant) {
+      setPalierCelebre(paliers)
+      const minuteur = window.setTimeout(() => setPalierCelebre(null), 4000)
+      return () => window.clearTimeout(minuteur)
+    }
+  }, [paliers])
 
   if (!etat) {
     if (erreur) return <EcranProbleme message={erreur} onRetour={() => navigate(`/rejoindre/${code}`)} />
@@ -75,9 +92,25 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
     )
   }
 
+  // Bandeau fixe : jauge de la salle + chronomètre (il reste visible même si la question est longue).
   const haut = (
     <>
-      <JaugeCollective jauge={etat.jauge} variante="fine" />
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 text-base font-semibold">La salle</span>
+        <div className="flex-1">
+          <JaugeCollective jauge={etat.jauge} variante="fine" />
+        </div>
+        {enQuestion && secondes !== null && secondes > 0 && (
+          <span role="timer" aria-label="Secondes restantes" className="rounded-pilule border-2 border-vert px-3 text-xl font-bold tabular-nums">
+            {secondes}
+          </span>
+        )}
+      </div>
+      {palierCelebre !== null && (
+        <p role="status" className="mt-2 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-center text-xl font-bold text-vert">
+          🎉 La salle débloque le palier {palierCelebre} !
+        </p>
+      )}
       {connexionPerdue && (
         <p role="status" className="mt-2 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
           Connexion perdue. Attends quelques secondes avant de répondre : on réessaie tout seul.
@@ -109,7 +142,7 @@ function Ecran({
   if (etat.etat === 'attente') {
     return (
       <>
-        <h1 className="text-3xl">Tu es dans la salle, {pseudo} !</h1>
+        <h1 className="text-3xl [overflow-wrap:anywhere]">Tu es dans la salle, {pseudo.replace(/-/g, '\u2011')} !</h1>
         <p className="text-lg">Regarde l'écran.</p>
       </>
     )
@@ -151,6 +184,7 @@ function EcranQuestion({
   const question = etat.question!
   const secondes = useSecondesRestantes(question.fin_reponses_le, decalage)
   const [envoyee, setEnvoyee] = useState(false)
+  const [rappel, setRappel] = useState<string | null>(null) // « Tu as répondu : … »
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
   const blocErreur = useRef<HTMLParagraphElement>(null)
@@ -171,6 +205,7 @@ function EcranQuestion({
     setErreur(null)
     try {
       await appelerRpc('repondre', { p_question: question.id, p_valeur: valeur })
+      setRappel(libelleReponse(question, valeur))
       setEnvoyee(true)
     } catch (e) {
       if (codeErreur(e) === '23505') {
@@ -188,6 +223,7 @@ function EcranQuestion({
     return (
       <>
         <h1 className="text-3xl">Réponse envoyée ✓</h1>
+        {rappel && <p className="text-lg font-semibold">Tu as répondu : {rappel}</p>}
         <p className="text-lg">Regarde l'écran pour découvrir les résultats.</p>
       </>
     )
@@ -204,14 +240,7 @@ function EcranQuestion({
 
   return (
     <>
-      <div className="flex items-start justify-between gap-4">
-        <h1 className="text-2xl leading-snug">{question.enonce}</h1>
-        {secondes !== null && (
-          <span className="rounded-pilule border-2 border-vert px-4 py-1 text-2xl font-bold tabular-nums" aria-label="Secondes restantes">
-            {secondes}
-          </span>
-        )}
-      </div>
+      <h1 className="text-2xl leading-snug">{question.enonce}</h1>
       {erreur && (
         <p ref={blocErreur} role="alert" className="rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
           {erreur}
@@ -272,6 +301,13 @@ function EcranQuestion({
   )
 }
 
+// Rappel lisible de ce que la personne a envoyé.
+function libelleReponse(question: NonNullable<EtatSession['question']>, valeur: number | string): string {
+  if (question.type === 'qcm' && typeof valeur === 'number') return `${lettre(valeur)} — ${question.choix?.[valeur] ?? ''}`
+  if (question.type === 'echelle') return `${valeur} sur 5`
+  return `« ${valeur} »`
+}
+
 function EcranResultats({ etat }: { etat: EtatSession }) {
   const question = etat.question!
   const resultats = etat.resultats
@@ -327,7 +363,7 @@ function ChampTexte({
   const [texte, setTexte] = useState('')
   const vide = texte.trim().length === 0
   const classes =
-    'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-xl text-vertFonce placeholder:text-vertFonce/60'
+    'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-xl text-vertFonce placeholder:text-discret'
 
   return (
     <form
@@ -361,7 +397,7 @@ function ChampTexte({
         />
       )}
       <p className="text-right text-sm font-semibold tabular-nums">
-        {texte.length} / {maximum}
+        {texte.length} / {maximum} caractères
       </p>
       <Bouton type="submit" disabled={envoi || vide}>
         Envoyer
@@ -420,7 +456,7 @@ function EcranBilanParticipant({ etat }: { etat: EtatSession }) {
   }
   return (
     <>
-      <h1 className="text-3xl">Bravo {pseudo} !</h1>
+      <h1 className="text-3xl [overflow-wrap:anywhere]">Bravo {(pseudo ?? '').replace(/-/g, '\u2011')} !</h1>
       {mes.map((m, i) => (
         <div key={i} className="rounded-carte border-2 border-vert p-5">
           <p className="text-lg">Tu as reçu la mention :</p>
