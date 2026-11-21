@@ -37,6 +37,12 @@ export interface ResultatsQuestion {
   bonne_reponse?: number
   repartition?: number[]
   taux_reussite?: number | null
+  // Échelle (repartition = nombre de réponses pour 1, 2, 3, 4, 5)
+  moyenne?: number | null
+  // Nuage de mots
+  mots?: { mot: string; nombre: number }[]
+  // Question ouverte (sans pseudo)
+  reponses?: { id: string; texte: string; coup_de_coeur: boolean }[]
   // Côté participant uniquement
   ma_reponse?: number | string | null
   est_correcte?: boolean | null

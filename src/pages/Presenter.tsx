@@ -11,7 +11,7 @@ import { appelerRpc } from '../lib/api'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
-import { useEtatSession } from '../lib/session'
+import { useEtatSession, type ParticipantListe } from '../lib/session'
 
 export default function Presenter() {
   const { sessionId } = useParams()
@@ -90,6 +90,24 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
     }
   }
 
+  // Modération : exclure un pseudo déplacé (avec confirmation) ou agir sur une réponse.
+  async function exclure(p: ParticipantListe) {
+    if (!window.confirm(`Exclure « ${p.pseudo} » de la salle ?`)) return
+    await actionFormateur('exclure_participant', { p_participant: p.id })
+  }
+  async function actionReponse(fonction: 'basculer_coup_de_coeur' | 'masquer_reponse', idReponse: string) {
+    await actionFormateur(fonction, { p_reponse: idReponse })
+  }
+  async function actionFormateur(fonction: string, parametres: Record<string, unknown>) {
+    setErreurAction(null)
+    try {
+      await appelerRpc(fonction, parametres)
+      recharger()
+    } catch (e) {
+      setErreurAction(messageErreur(e))
+    }
+  }
+
   if (!etat) {
     return (
       <MiseEnPagePresentateur>
@@ -124,6 +142,7 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
           participants={participants}
           enCours={enCours}
           onPremiereQuestion={() => piloter('ouvrir_question')}
+          onExclure={exclure}
         />
       )}
       {etat.etat === 'question' && etat.question && (
@@ -136,6 +155,7 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
           enCours={enCours}
           onSuivante={() => piloter('ouvrir_question')}
           onBilan={() => piloter('passer_au_bilan')}
+          onAction={actionReponse}
         />
       )}
       {(etat.etat === 'bilan' || etat.etat === 'terminee') && (

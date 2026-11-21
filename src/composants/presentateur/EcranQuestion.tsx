@@ -23,7 +23,7 @@ export default function EcranQuestion({ etat, secondes, enCours, onArreter }: Pr
         </p>
       </div>
 
-      {question.type === 'qcm' ? (
+      {question.type === 'qcm' && (
         <ul className="grid grid-cols-2 gap-[2vh]">
           {(question.choix ?? []).map((texte, i) => (
             <li key={i} className="flex items-center gap-[1.5vw] rounded-carte border-2 border-blanc px-[1.5vw] py-[1.5vh]">
@@ -34,8 +34,6 @@ export default function EcranQuestion({ etat, secondes, enCours, onArreter }: Pr
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-vertClair">Ce type de question arrive bientôt</p>
       )}
 
       <div className="flex items-center justify-between gap-[3vw]">

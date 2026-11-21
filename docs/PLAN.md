@@ -13,9 +13,10 @@
 |---|---|---|
 | 1 | Schéma SQL, RLS, fonctions serveur, tests SQL | ✅ |
 | 2 | Squelette de l'application, thème, pages vides | ✅ |
-| 3 | Un QCM de bout en bout (rejoindre → répondre → résultats), testé en vrai par JF | |
-| 4 | Nuage de mots, question ouverte, échelle, jauge, mentions, bilan | |
-| 5 | Création et édition de quiz | |
+| 3 | Un QCM de bout en bout (rejoindre → répondre → résultats), testé en vrai par JF | ✅ |
+| 4 | Nuage de mots, question ouverte, échelle, jauge, mentions, bilan | ✅ (à tester en vrai) |
+| 5 | Création et édition de quiz | ✅ (à tester en vrai) |
+| 5b | Proposer des questions à partir d'un PDF (fonction Supabase + API Claude) | |
 | 6 | Export CSV, quiz d'exemple, README | |
 | 7 | Script de test de charge (100 téléphones simulés) | |
 

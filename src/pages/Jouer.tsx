@@ -8,7 +8,7 @@ import { assurerConnexionAnonyme } from '../lib/auth'
 import { codeErreur, messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
 import { lireSalle } from '../lib/memoire'
-import { lettre, useEtatSession, type EtatSession } from '../lib/session'
+import { lettre, useEtatSession, type EtatSession, type NomMention } from '../lib/session'
 
 // Étape 1 : s'assurer qu'on est connecté et retrouver l'identifiant de la session.
 export default function Jouer() {
@@ -106,23 +106,16 @@ function Ecran({ etat, decalage, recharger }: { etat: EtatSession; decalage: num
   }
 
   if (etat.etat === 'question' && etat.question) {
-    if (etat.question.type !== 'qcm') return <Bientot />
     // key : un nouvel écran (et un nouvel état local) à chaque nouvelle question
     return <EcranQuestion key={etat.question.id} etat={etat} decalage={decalage} recharger={recharger} />
   }
 
   if (etat.etat === 'resultats' && etat.question) {
-    if (etat.question.type !== 'qcm') return <Bientot />
-    return <EcranResultats etat={etat} />
+    return etat.question.type === 'qcm' ? <EcranResultats etat={etat} /> : <EcranResultatsLibre etat={etat} />
   }
 
   if (etat.etat === 'bilan' || etat.etat === 'terminee') {
-    return (
-      <>
-        <h1 className="text-3xl">Merci !</h1>
-        <p className="text-lg">Le bilan est à l'écran.</p>
-      </>
-    )
+    return <EcranBilanParticipant etat={etat} />
   }
 
   // Résultats sans question (ne devrait pas arriver) : on attend gentiment.
@@ -130,15 +123,6 @@ function Ecran({ etat, decalage, recharger }: { etat: EtatSession; decalage: num
     <>
       <h1 className="text-3xl">Un instant…</h1>
       <p className="text-lg">Regarde l'écran.</p>
-    </>
-  )
-}
-
-function Bientot() {
-  return (
-    <>
-      <h1 className="text-3xl">Ce type de question arrive bientôt</h1>
-      <p className="text-lg">Regarde l'écran, on continue ensemble.</p>
     </>
   )
 }
@@ -153,12 +137,12 @@ function EcranQuestion({ etat, decalage, recharger }: { etat: EtatSession; decal
   const aRepondu = envoyee || etat.a_repondu === true
   const tempsEcoule = secondes === 0
 
-  async function repondre(indice: number) {
+  async function repondre(valeur: number | string) {
     if (envoi) return
     setEnvoi(true)
     setErreur(null)
     try {
-      await appelerRpc('repondre', { p_question: question.id, p_valeur: indice })
+      await appelerRpc('repondre', { p_question: question.id, p_valeur: valeur })
       setEnvoyee(true)
     } catch (e) {
       if (codeErreur(e) === '23505') {
@@ -200,22 +184,57 @@ function EcranQuestion({ etat, decalage, recharger }: { etat: EtatSession; decal
           </span>
         )}
       </div>
-      <div className="flex flex-col gap-3">
-        {(question.choix ?? []).map((texte, i) => (
-          <button
-            key={i}
-            type="button"
-            disabled={envoi}
-            onClick={() => repondre(i)}
-            className="flex min-h-[64px] w-full items-center gap-4 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-left text-lg font-semibold text-vertFonce transition-colors active:bg-vert active:text-blanc disabled:opacity-50"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pilule bg-vert text-blanc">
-              {lettre(i)}
-            </span>
-            <span>{texte}</span>
-          </button>
-        ))}
-      </div>
+      {question.type === 'qcm' && (
+        <div className="flex flex-col gap-3">
+          {(question.choix ?? []).map((texte, i) => (
+            <button
+              key={i}
+              type="button"
+              disabled={envoi}
+              onClick={() => repondre(i)}
+              className="flex min-h-[64px] w-full items-center gap-4 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-left text-lg font-semibold text-vertFonce transition-colors active:bg-vert active:text-blanc disabled:opacity-50"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pilule bg-vert text-blanc">
+                {lettre(i)}
+              </span>
+              <span>{texte}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {question.type === 'echelle' && (
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                disabled={envoi}
+                onClick={() => repondre(n)}
+                className="flex min-h-[72px] items-center justify-center rounded-champ border-2 border-vert bg-blanc text-3xl font-bold text-vertFonce transition-colors active:bg-vert active:text-blanc disabled:opacity-50"
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-between gap-4 text-sm font-semibold">
+            <span className="max-w-[45%]">{question.libelle_min}</span>
+            <span className="max-w-[45%] text-right">{question.libelle_max}</span>
+          </div>
+        </div>
+      )}
+      {question.type === 'nuage' && (
+        <ChampTexte
+          maximum={30}
+          ligneUnique
+          indication="Un mot ou une courte expression"
+          envoi={envoi}
+          onEnvoyer={repondre}
+        />
+      )}
+      {question.type === 'ouverte' && (
+        <ChampTexte maximum={280} indication="Écris ta réponse" envoi={envoi} onEnvoyer={repondre} />
+      )}
       {erreur && (
         <p role="alert" className="text-lg font-semibold">
           {erreur}
@@ -259,6 +278,128 @@ function EcranResultats({ etat }: { etat: EtatSession }) {
       <h1 className="text-3xl">Tu n'as pas eu le temps de répondre.</h1>
       <p className="text-lg">La bonne réponse était : {bonne}</p>
       <p className="text-lg">Pas grave, à la prochaine question !</p>
+    </>
+  )
+}
+
+// Champ de saisie avec compteur de caractères et bouton Envoyer (nuage et question ouverte).
+function ChampTexte({
+  maximum,
+  ligneUnique = false,
+  indication,
+  envoi,
+  onEnvoyer,
+}: {
+  maximum: number
+  ligneUnique?: boolean
+  indication: string
+  envoi: boolean
+  onEnvoyer: (texte: string) => void
+}) {
+  const [texte, setTexte] = useState('')
+  const vide = texte.trim().length === 0
+  const classes =
+    'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-xl text-vertFonce placeholder:text-vertFonce/60'
+
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!vide) onEnvoyer(texte.trim())
+      }}
+    >
+      <label className="text-lg" htmlFor="saisie">
+        {indication}
+      </label>
+      {ligneUnique ? (
+        <input
+          id="saisie"
+          type="text"
+          autoComplete="off"
+          maxLength={maximum}
+          value={texte}
+          onChange={(e) => setTexte(e.target.value)}
+          className={`${classes} min-h-[64px]`}
+        />
+      ) : (
+        <textarea
+          id="saisie"
+          rows={5}
+          maxLength={maximum}
+          value={texte}
+          onChange={(e) => setTexte(e.target.value)}
+          className={classes}
+        />
+      )}
+      <p className="text-right text-sm font-semibold tabular-nums">
+        {texte.length} / {maximum}
+      </p>
+      <Bouton type="submit" disabled={envoi || vide}>
+        Envoyer
+      </Bouton>
+    </form>
+  )
+}
+
+// Résultats d'une question sans bonne réponse (nuage, ouverte, échelle) : jamais de juste/faux.
+function EcranResultatsLibre({ etat }: { etat: EtatSession }) {
+  const question = etat.question!
+  const resultats = etat.resultats
+  const aRepondu = resultats?.ma_reponse !== null && resultats?.ma_reponse !== undefined
+  if (!resultats) return <h1 className="text-3xl">Regarde l'écran</h1>
+
+  if (!aRepondu) {
+    return (
+      <>
+        <h1 className="text-3xl">Tu n'as pas eu le temps de répondre.</h1>
+        <p className="text-lg">Pas grave, regarde l'écran et à la prochaine question !</p>
+      </>
+    )
+  }
+  return (
+    <>
+      <h1 className="text-4xl text-vert">Merci !</h1>
+      <p className="text-xl font-semibold text-vert">+{resultats.ma_contribution ?? 1} pour la salle</p>
+      {question.type === 'echelle' && resultats.moyenne != null && (
+        <p className="text-lg">
+          Moyenne de la salle : <span className="text-2xl font-bold">{String(resultats.moyenne).replace('.', ',')}</span> / 5
+        </p>
+      )}
+      {question.type !== 'echelle' && <p className="text-lg">Regarde l'écran : les réponses s'affichent ensemble.</p>}
+    </>
+  )
+}
+
+// Bilan côté téléphone : la mention du participant s'il en a une, sinon un remerciement.
+const LIBELLES_MENTION: Record<NomMention, string> = {
+  a_repondu_a_tout: 'A répondu à tout',
+  plus_belle_progression: 'Plus belle progression',
+  coup_de_coeur: 'Réponse coup de cœur',
+}
+
+function EcranBilanParticipant({ etat }: { etat: EtatSession }) {
+  const pseudo = etat.moi?.pseudo
+  const mes = (etat.bilan?.mentions ?? []).filter((m) => m.pseudo === pseudo)
+
+  if (mes.length === 0) {
+    return (
+      <>
+        <h1 className="text-3xl">Merci d'avoir joué avec nous !</h1>
+        <p className="text-lg">Chaque réponse a fait grandir la jauge de la salle. Le bilan est à l'écran.</p>
+      </>
+    )
+  }
+  return (
+    <>
+      <h1 className="text-3xl">Bravo {pseudo} !</h1>
+      {mes.map((m, i) => (
+        <div key={i} className="rounded-carte border-2 border-vert p-5">
+          <p className="text-lg">Tu as reçu la mention :</p>
+          <p className="text-2xl font-bold text-vert">{LIBELLES_MENTION[m.type]} 🎉</p>
+        </div>
+      ))}
+      <p className="text-lg">Merci d'avoir fait grandir la jauge de la salle. Le bilan est à l'écran.</p>
     </>
   )
 }

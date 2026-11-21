@@ -7,9 +7,10 @@ interface Props {
   participants: ParticipantListe[]
   enCours: boolean
   onPremiereQuestion: () => void
+  onExclure: (participant: ParticipantListe) => void
 }
 
-export default function EcranAttente({ etat, participants, enCours, onPremiereQuestion }: Props) {
+export default function EcranAttente({ etat, participants, enCours, onPremiereQuestion, onExclure }: Props) {
   const lien = `${window.location.origin}/rejoindre/${etat.code}`
   const n = etat.nb_participants
 
@@ -31,10 +32,19 @@ export default function EcranAttente({ etat, participants, enCours, onPremiereQu
         <p className="font-semibold">
           {n === 0 ? 'En attente des premiers participants…' : `${n} participant${n > 1 ? 's' : ''} dans la salle`}
         </p>
-        <ul className="flex max-h-[22vh] flex-wrap justify-center gap-[1vh] overflow-hidden text-[0.7em]">
+        <ul className="flex max-h-[22vh] flex-wrap justify-center gap-[1vh] overflow-visible text-[0.7em]">
           {participants.map((p) => (
-            <li key={p.id} className="rounded-pilule border-2 border-vertClair px-[1.2vw] py-[0.4vh]">
+            <li key={p.id} className="group relative rounded-pilule border-2 border-vertClair px-[1.2vw] py-[0.4vh]">
               {p.pseudo}
+              {/* Petite croix visible au survol : retirer un pseudo déplacé */}
+              <button
+                type="button"
+                onClick={() => onExclure(p)}
+                aria-label={`Exclure ${p.pseudo}`}
+                className="absolute -right-[0.6vw] -top-[1vh] hidden h-[1.5em] w-[1.5em] items-center justify-center rounded-pilule bg-blanc text-[0.7em] font-bold leading-none text-bleuViolet group-hover:flex focus:flex"
+              >
+                ×
+              </button>
             </li>
           ))}
         </ul>

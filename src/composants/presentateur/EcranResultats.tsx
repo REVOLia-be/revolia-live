@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Bouton from '../Bouton'
+import ResultatsLibres from './ResultatsLibres'
 import { lettre, type EtatSession } from '../../lib/session'
 
 interface Props {
@@ -7,9 +8,10 @@ interface Props {
   enCours: boolean
   onSuivante: () => void
   onBilan: () => void
+  onAction: (fonction: 'basculer_coup_de_coeur' | 'masquer_reponse', idReponse: string) => void
 }
 
-export default function EcranResultats({ etat, enCours, onSuivante, onBilan }: Props) {
+export default function EcranResultats({ etat, enCours, onSuivante, onBilan, onAction }: Props) {
   const question = etat.question!
   const resultats = etat.resultats
   const dernier = question.ordre >= etat.nb_questions
@@ -61,9 +63,9 @@ export default function EcranResultats({ etat, enCours, onSuivante, onBilan }: P
               : `${resultats.taux_reussite} % de bonnes réponses dans la salle`}
           </p>
         </>
-      ) : (
-        <p className="text-vertClair">Ce type de question arrive bientôt</p>
-      )}
+      ) : resultats ? (
+        <ResultatsLibres question={question} resultats={resultats} onAction={onAction} />
+      ) : null}
 
       <div className="max-w-xl text-[0.6em]">
         {dernier ? (

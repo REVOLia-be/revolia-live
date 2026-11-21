@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
-import { appelerRpc } from '../lib/api'
+import PanneauLancement from '../composants/edition/PanneauLancement'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
 import { supabase } from '../lib/supabase'
@@ -95,6 +95,7 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
   const [quiz, setQuiz] = useState<LigneQuiz[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [creation, setCreation] = useState(false)
+  const navigate = useNavigate()
 
   const charger = useCallback(async () => {
     const { data, error } = await supabase
@@ -119,6 +120,22 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
   useEffect(() => {
     void charger()
   }, [charger])
+
+  async function creerNouveau() {
+    setCreation(true)
+    setErreur(null)
+    const { data, error } = await supabase
+      .from('quiz')
+      .insert({ formateur_id: formateurId, titre: 'Sans titre' })
+      .select('id')
+      .single()
+    if (error) {
+      setErreur(messageErreur(error))
+      setCreation(false)
+      return
+    }
+    navigate(`/formateur/quiz/${data.id}`)
+  }
 
   async function creerDemo() {
     setCreation(true)
@@ -167,12 +184,15 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
       {quiz === null && !erreur && <p className="text-lg">Un instant…</p>}
       {quiz?.length === 0 && (
         <Carte>
-          <p className="text-lg">Tu n'as pas encore de quiz. Crée le quiz de démonstration pour essayer.</p>
+          <p className="text-lg">Tu n'as pas encore de quiz. Crée un nouveau quiz, ou le quiz de démonstration pour essayer.</p>
         </Carte>
       )}
-      {quiz?.map((q) => <CarteQuiz key={q.id} quiz={q} />)}
+      {quiz?.map((q) => <CarteQuiz key={q.id} quiz={q} onChange={charger} onErreur={setErreur} />)}
 
       <div className="flex flex-col gap-3 sm:flex-row">
+        <Bouton type="button" onClick={creerNouveau} disabled={creation}>
+          Nouveau quiz
+        </Bouton>
         <Bouton type="button" variante="secondaire" onClick={creerDemo} disabled={creation}>
           {creation ? 'Création…' : 'Créer un quiz de démonstration'}
         </Bouton>
@@ -182,31 +202,68 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
   )
 }
 
-function CarteQuiz({ quiz }: { quiz: LigneQuiz }) {
+function CarteQuiz({
+  quiz,
+  onChange,
+  onErreur,
+}: {
+  quiz: LigneQuiz
+  onChange: () => Promise<void>
+  onErreur: (m: string | null) => void
+}) {
   const navigate = useNavigate()
-  const [parTable, setParTable] = useState(false)
-  const [noms, setNoms] = useState('')
-  const [lancement, setLancement] = useState(false)
-  const [erreur, setErreur] = useState<string | null>(null)
+  const [occupe, setOccupe] = useState(false)
+  const [confirmer, setConfirmer] = useState(false)
 
-  async function lancer() {
-    setLancement(true)
-    setErreur(null)
+  async function dupliquer() {
+    setOccupe(true)
+    onErreur(null)
+    let nouveauId: string | null = null
     try {
-      const tables = noms
-        .split(',')
-        .map((n) => n.trim())
-        .filter(Boolean)
-      const resultat = await appelerRpc<{ session_id: string; code: string }>('lancer_session', {
-        p_quiz: quiz.id,
-        p_mode_tables: parTable,
-        p_noms_tables: parTable ? tables : null,
-      })
-      navigate(`/presenter/${resultat.session_id}`)
+      const { data: original, error } = await supabase
+        .from('quiz')
+        .select('formateur_id, titre, description')
+        .eq('id', quiz.id)
+        .single()
+      if (error) throw error
+      const suffixe = ' (copie)'
+      const titre = original.titre.slice(0, 120 - suffixe.length) + suffixe
+      const { data: copie, error: e2 } = await supabase
+        .from('quiz')
+        .insert({ formateur_id: original.formateur_id, titre, description: original.description })
+        .select('id')
+        .single()
+      if (e2) throw e2
+      nouveauId = copie.id
+      const { data: lignes, error: e3 } = await supabase
+        .from('questions')
+        .select('ordre, type, enonce, choix, bonne_reponse, libelle_min, libelle_max, duree_secondes')
+        .eq('quiz_id', quiz.id)
+        .order('ordre')
+      if (e3) throw e3
+      if (lignes && lignes.length > 0) {
+        const { error: e4 } = await supabase
+          .from('questions')
+          .insert(lignes.map((l: Record<string, unknown>) => ({ ...l, quiz_id: copie.id })))
+        if (e4) throw e4
+      }
+      await onChange()
     } catch (e) {
-      setErreur(messageErreur(e))
-      setLancement(false)
+      if (nouveauId) await supabase.from('quiz').delete().eq('id', nouveauId) // pas de copie à moitié faite
+      onErreur(messageErreur(e))
+    } finally {
+      setOccupe(false)
     }
+  }
+
+  async function supprimer() {
+    setOccupe(true)
+    onErreur(null)
+    const { error } = await supabase.from('quiz').delete().eq('id', quiz.id)
+    if (error) onErreur(messageErreur(error))
+    else await onChange()
+    setOccupe(false)
+    setConfirmer(false)
   }
 
   return (
@@ -219,33 +276,34 @@ function CarteQuiz({ quiz }: { quiz: LigneQuiz }) {
         {quiz.description && <p className="mt-1 text-base">{quiz.description}</p>}
       </div>
 
-      <label className="flex min-h-[44px] items-center gap-3 text-lg">
-        <input
-          type="checkbox"
-          checked={parTable}
-          onChange={(e) => setParTable(e.target.checked)}
-          className="h-6 w-6 accent-vert"
-        />
-        Mode par table
-      </label>
-      {parTable && (
-        <input
-          value={noms}
-          onChange={(e) => setNoms(e.target.value)}
-          aria-label="Noms des tables, séparés par des virgules"
-          placeholder="Noms des tables, séparés par des virgules (ex. Table 1, Table 2, Table 3)"
-          className="min-h-[56px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-lg text-vertFonce placeholder:text-vertClair focus:outline-none focus:ring-4 focus:ring-vertClair"
-        />
-      )}
+      <PanneauLancement quizId={quiz.id} />
 
-      {erreur && (
-        <p role="alert" className="text-lg font-semibold">
-          {erreur}
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Bouton type="button" variante="secondaire" onClick={() => navigate(`/formateur/quiz/${quiz.id}`)} disabled={occupe}>
+          Modifier
+        </Bouton>
+        <Bouton type="button" variante="secondaire" onClick={dupliquer} disabled={occupe}>
+          Dupliquer
+        </Bouton>
+        <Bouton type="button" variante="secondaire" onClick={() => setConfirmer(true)} disabled={occupe}>
+          Supprimer
+        </Bouton>
+      </div>
+      {confirmer && (
+        <div className="flex flex-col gap-3 rounded-champ border-2 border-vert p-4">
+          <p className="text-lg font-semibold">
+            Supprimer « {quiz.titre} » et ses questions ? Cette action est définitive.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Bouton type="button" onClick={supprimer} disabled={occupe}>
+              Oui, supprimer
+            </Bouton>
+            <Bouton type="button" variante="secondaire" onClick={() => setConfirmer(false)} disabled={occupe}>
+              Non, garder
+            </Bouton>
+          </div>
+        </div>
       )}
-      <Bouton type="button" onClick={lancer} disabled={lancement}>
-        {lancement ? 'Lancement…' : 'Lancer'}
-      </Bouton>
     </Carte>
   )
 }
