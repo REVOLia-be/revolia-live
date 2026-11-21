@@ -89,6 +89,19 @@ async function messageDepuisFonction(erreur: unknown): Promise<string> {
 
 const niveauSuperieur = (n: Niveau): Niveau => (n === 'decouverte' ? 'intermediaire' : 'expert')
 
+// Note la consommation de jetons pour le journal d'utilisation. Silencieux : un échec ne gêne jamais le formateur.
+async function journaliser(usage: { input_tokens?: number; output_tokens?: number } | undefined) {
+  if (!usage) return
+  try {
+    await supabase.rpc('journaliser_generation', {
+      p_tokens_entree: usage.input_tokens,
+      p_tokens_sortie: usage.output_tokens,
+    })
+  } catch {
+    /* journalisation ratée : on ignore */
+  }
+}
+
 interface Props {
   onAjouter: (questions: QuestionEdition[]) => void
   onFermer: () => void
@@ -134,6 +147,7 @@ export default function PanneauPropositions({ onAjouter, onFermer }: Props) {
         body: { ...contenu, nombre, types, niveau, consignes: consignes.trim() || undefined },
       })
       if (error) throw new Error(await messageDepuisFonction(error))
+      void journaliser(data?.usage)
       const recues = (data?.questions ?? []) as Proposition[]
       if (recues.length === 0) throw new Error("Claude n'a rien proposé cette fois. Réessaie, ou précise tes consignes.")
       setLignes(recues.map((p) => ({ cle: crypto.randomUUID(), courante: p, durcissement: false, statut: 'a_traiter' })))
@@ -169,6 +183,7 @@ export default function PanneauPropositions({ onAjouter, onFermer }: Props) {
         body: { mode: 'durcir', question: l.courante, niveau_cible: niveauSuperieur(l.courante.niveau) },
       })
       if (error) throw new Error(await messageDepuisFonction(error))
+      void journaliser(data?.usage)
       if (!data?.question) throw new Error("Claude n'a pas pu durcir cette question. Réessaie.")
       modifierLigne(l.cle, { courante: data.question as Proposition, precedente: l.courante, durcissement: false })
     } catch (e) {

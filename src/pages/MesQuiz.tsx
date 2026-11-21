@@ -175,9 +175,14 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-10">
       <LogoMarque variante="vif" className="h-6 self-start" />
-      <Link to="/formateur/sessions" className="self-start text-base text-vert underline">
-        Mes sessions passées →
-      </Link>
+      <div className="flex flex-wrap gap-6">
+        <Link to="/formateur/sessions" className="self-start text-base text-vert underline">
+          Mes sessions passées →
+        </Link>
+        <Link to="/formateur/utilisation" className="self-start text-base text-vert underline">
+          Utilisation →
+        </Link>
+      </div>
       <h1 className="text-4xl">Mes quiz</h1>
 
       {erreur && (
