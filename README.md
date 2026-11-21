@@ -4,7 +4,7 @@ Outil de quiz en direct pour les formations REVOLia. Le formateur projette un é
 
 L'outil est coopératif : jamais de classement ni de comparaison entre personnes ou tables. On construit une jauge commune, on célèbre des mentions positives et on termine par un bilan de salle.
 
-**Adresse du site** : https://revolia-live.jf-494.workers.dev
+**Adresse du site** : https://quiz.revolia.be
 
 ## Animer une session (pour le formateur)
 
@@ -31,7 +31,7 @@ L'outil est coopératif : jamais de classement ni de comparaison entre personnes
 
 ## Déploiement
 
-Le site est hébergé sur Cloudflare. Chaque envoi (push) sur la branche `main` republie automatiquement le site.
+Le site est hébergé sur Cloudflare Pages (projet `revolia-quiz-pages`, adresse `quiz.revolia.be` reliée par une ligne CNAME chez one.com). Chaque envoi (push) sur la branche `main` republie automatiquement le site.
 
 Dans Cloudflare, les deux variables suivantes doivent être renseignées (valeurs prises dans Supabase, rubrique API) :
 
