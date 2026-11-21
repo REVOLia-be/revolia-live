@@ -11,7 +11,7 @@ export default function NuageDeMots({ mots }: { mots: { mot: string; nombre: num
       {mots.map((m, i) => (
         <li
           key={m.mot}
-          className={`animation-apparition font-titre font-bold leading-none ${COULEURS[i % COULEURS.length]}`}
+          className={`animation-apparition font-titre font-normal leading-none ${COULEURS[i % COULEURS.length]}`}
           style={{
             fontSize: `${0.7 + 1.8 * (m.nombre / maximum)}em`, // de 0,7 à 2,5 fois la taille de base
             animationDelay: `${Math.min(i, 30) * 80}ms`,

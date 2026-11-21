@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
+import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import { useFormateur } from '../lib/auth'
 import { construireCsv, dateDuJour, simplifierTitre, telechargerCsv, type LigneExport } from '../lib/csv'
@@ -108,6 +109,7 @@ function ListeSessions() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-10">
+      <LogoMarque variante="vif" className="h-6 self-start" />
       <Link to="/formateur" className="self-start text-base font-semibold text-vert underline">
         ← Mes quiz
       </Link>

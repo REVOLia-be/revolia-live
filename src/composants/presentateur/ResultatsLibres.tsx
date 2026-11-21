@@ -88,7 +88,7 @@ function BarresEchelle({ question, resultats }: Pick<Props, 'question' | 'result
       </div>
       <div className="text-center">
         <p className="text-[0.6em] text-vertClair">Moyenne</p>
-        <p className="font-titre text-[3.2em] font-bold leading-none tabular-nums">
+        <p className="font-titre text-[3.2em] font-normal leading-none tabular-nums">
           {resultats.moyenne == null ? '–' : String(resultats.moyenne).replace('.', ',')}
         </p>
         <p className="text-[0.6em]">sur 5</p>

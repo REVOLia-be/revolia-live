@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
+import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import EditeurQuestion from '../composants/edition/EditeurQuestion'
 import PanneauLancement from '../composants/edition/PanneauLancement'
@@ -254,6 +255,7 @@ function Editeur({ quizId }: { quizId: string }) {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 pb-32 pt-10">
+      <LogoMarque variante="vif" className="h-6 self-start" />
       <Link to="/formateur" onClick={retour} className="text-lg font-semibold text-vert underline">
         ← Mes quiz
       </Link>

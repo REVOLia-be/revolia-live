@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
+import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import PanneauLancement from '../composants/edition/PanneauLancement'
 import { useFormateur } from '../lib/auth'
@@ -173,6 +174,7 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-10">
+      <LogoMarque variante="vif" className="h-6 self-start" />
       <Link to="/formateur/sessions" className="self-start text-base text-vert underline">
         Mes sessions passées →
       </Link>

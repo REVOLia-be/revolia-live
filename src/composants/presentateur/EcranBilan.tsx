@@ -111,7 +111,7 @@ function SectionJauge({ bilan }: { bilan: Bilan }) {
 function Chiffre({ valeur, libelle }: { valeur: string | number; libelle: string }) {
   return (
     <div className="flex flex-col items-center gap-[1vh] rounded-carte border-2 border-blanc px-[2vw] py-[3vh] text-center">
-      <span className="font-titre text-[2.6em] font-bold leading-none text-vertClair">{valeur}</span>
+      <span className="font-titre text-[2.6em] font-normal leading-none text-vertClair">{valeur}</span>
       <span className="text-[0.8em]">{libelle}</span>
     </div>
   )

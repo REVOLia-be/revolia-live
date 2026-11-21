@@ -17,7 +17,7 @@ export default function EcranQuestion({ etat, secondes, enCours, onArreter }: Pr
         <h1 className="text-[1.2em] leading-tight">{question.enonce}</h1>
         <p
           aria-label="Secondes restantes"
-          className="font-titre text-[2.6em] font-bold leading-none tabular-nums text-vertClair"
+          className="font-titre text-[2.6em] font-normal leading-none tabular-nums text-vertClair"
         >
           {secondes ?? ''}
         </p>

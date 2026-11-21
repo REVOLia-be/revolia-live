@@ -8,7 +8,7 @@
     @apply bg-blanc font-texte text-vertFonce antialiased;
   }
   h1, h2, h3 {
-    @apply font-titre font-bold;
+    @apply font-titre font-normal;
   }
 }
 

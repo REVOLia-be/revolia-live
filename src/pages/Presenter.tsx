@@ -135,7 +135,7 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
   )
 
   return (
-    <MiseEnPagePresentateur haut={haut}>
+    <MiseEnPagePresentateur haut={haut} plein={etat.etat === 'attente'}>
       {etat.etat === 'attente' && (
         <EcranAttente
           etat={etat}

@@ -21,6 +21,13 @@
   font-display: swap;
   src: url('/fonts/poppins-latin-700-normal.woff2') format('woff2');
 }
+@font-face {
+  font-family: 'iBrand';
+  font-style: normal;
+  font-weight: 400; /* une seule graisse : pas de faux gras, les titres restent en 400 */
+  font-display: swap;
+  src: url('/fonts/iBrand-Regular.otf') format('opentype');
+}
 
 :root {
   --couleur-vert: #00824d;
@@ -30,8 +37,8 @@
   --couleur-bleu-violet: #030159;
   --couleur-blanc: #ffffff;
 
-  /* Titres : iBrand dès que les fichiers arrivent, repli Poppins 700. */
-  --police-titre: 'Poppins', system-ui, sans-serif;
+  /* Titres : iBrand (une seule graisse, toujours en font-weight 400), repli Poppins. */
+  --police-titre: 'iBrand', 'Poppins', system-ui, sans-serif;
   --police-texte: 'Poppins', system-ui, sans-serif;
 
   --rayon-pilule: 9999px;
