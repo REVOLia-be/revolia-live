@@ -16,9 +16,9 @@
 | 3 | Un QCM de bout en bout (rejoindre → répondre → résultats), testé en vrai par JF | ✅ |
 | 4 | Nuage de mots, question ouverte, échelle, jauge, mentions, bilan | ✅ (à tester en vrai) |
 | 5 | Création et édition de quiz | ✅ (à tester en vrai) |
-| 5b | Proposer des questions à partir d'un PDF (fonction Supabase + API Claude) | |
-| 6 | Export CSV, quiz d'exemple, README | |
-| 7 | Script de test de charge (100 téléphones simulés) | |
+| 5b | Proposer des questions à partir d'un PDF (fonction Supabase + API Claude) | ✅ déployée (à tester avec la clé API) |
+| 6 | Export CSV, sessions passées, README | ✅ |
+| 7 | Script de test de charge (100 téléphones simulés) | ✅ 21/11 : 100/100 inscrits, temps réel p95 0,5 s, repondre p95 0,17 s, 0 erreur |
 
 ## Cycle de vie d'une session
 
