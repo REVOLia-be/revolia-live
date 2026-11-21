@@ -5,6 +5,7 @@ import Carte from '../composants/Carte'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import EditeurQuestion from '../composants/edition/EditeurQuestion'
 import PanneauLancement from '../composants/edition/PanneauLancement'
+import PanneauPropositions from '../composants/edition/PanneauPropositions'
 import {
   LIMITES,
   TYPES,
@@ -75,6 +76,7 @@ function Editeur({ quizId }: { quizId: string }) {
   const [afficherErreurs, setAfficherErreurs] = useState(false)
   const [typeAjout, setTypeAjout] = useState<TypeQuestion>('qcm')
   const [confirmationSuppr, setConfirmationSuppr] = useState<string | null>(null)
+  const [panneauIA, setPanneauIA] = useState(false) // panneau « Proposer des questions »
 
   const charger = useCallback(async () => {
     setChargement('en_cours')
@@ -353,6 +355,20 @@ function Editeur({ quizId }: { quizId: string }) {
           + Ajouter cette question
         </Bouton>
       </Carte>
+
+      {panneauIA ? (
+        <PanneauPropositions
+          onAjouter={(qs) => changer({ questions: [...courant.questions, ...qs] })}
+          onFermer={() => setPanneauIA(false)}
+        />
+      ) : (
+        <Carte className="flex flex-col gap-3">
+          <p className="text-lg">Tu as un support de formation ? Claude peut te proposer des questions.</p>
+          <Bouton type="button" variante="secondaire" onClick={() => setPanneauIA(true)}>
+            ✨ Proposer des questions à partir d'un PDF
+          </Bouton>
+        </Carte>
+      )}
 
       <Carte>
         <h2 className="mb-3 text-2xl">Lancer ce quiz en direct</h2>
