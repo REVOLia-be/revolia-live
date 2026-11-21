@@ -48,7 +48,7 @@ JF (formateur, propriétaire du produit). Il n'est pas développeur : explique l
 | Vert foncé | `#004d3d` — texte sur blanc, fonds |
 | Vert clair | `#80bf9e` — texte/accent sur fond foncé uniquement, **jamais en fond** |
 | Bleu violet | `#030159` — fond de l'écran projeté, texte sur blanc |
-| Titres | iBrand (en attente des fichiers) → repli : Poppins 700 |
+| Titres | iBrand Regular (`public/fonts`, licence web OK) → repli : Poppins |
 | Texte | Poppins |
 
 Écran projeté : fond bleu violet, texte blanc, accent vert clair. Téléphone : fond blanc, texte vert foncé, gros boutons verts.
@@ -58,3 +58,8 @@ JF (formateur, propriétaire du produit). Il n'est pas développeur : explique l
 - Tutoiement, vocabulaire non technique, messages d'erreur qui disent ce qui s'est passé et quoi faire. Jamais de code d'erreur brut.
 - Mobile-first pour l'écran participant : cibles tactiles ≥ 56 px, un seul point focal.
 - Aucune clé dans le dépôt : voir `.env.example`.
+
+## Documentation (Notion)
+
+La documentation de référence vit dans Notion, base « REVOLia — Documentation interne », propriété **Application = REVOLia Live** (fiche application, guide formateur, générateur, check-list, comptes et services, décisions, maintenance, journal des changements).
+**Toute évolution du produit met aussi à jour la page Notion concernée et ajoute une ligne au « Journal des changements ».** Jamais de clé ni de mot de passe dans Notion : on indique seulement où se trouve le réglage.
