@@ -1,12 +1,14 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import Bouton from '../Bouton'
+import ZonesEcran from './ZonesEcran'
 import type { EtatSession, ParticipantListe } from '../../lib/session'
 
 interface Props {
   etat: EtatSession
   participants: ParticipantListe[]
   enCours: boolean
+  erreur: string | null
   onPremiereQuestion: () => void
   onExclure: (participant: ParticipantListe) => void
 }
@@ -23,7 +25,7 @@ const PALIERS = [
 
 // Écran d'attente en zones fixes : en-tête / zone principale (2 colonnes) / pied de page.
 // Aucune position absolue sur le bouton : chaque zone a sa place dans la grille.
-export default function EcranAttente({ etat, participants, enCours, onPremiereQuestion, onExclure }: Props) {
+export default function EcranAttente({ etat, participants, enCours, erreur, onPremiereQuestion, onExclure }: Props) {
   const lien = `${window.location.origin}/rejoindre/${etat.code}`
   const n = etat.nb_participants
   const palier = PALIERS.find((p) => Math.max(n, participants.length) <= p.jusqua) ?? PALIERS[PALIERS.length - 1]
@@ -49,7 +51,15 @@ export default function EcranAttente({ etat, participants, enCours, onPremiereQu
   const masques = total - affiches.length
 
   return (
-    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-[2vh]">
+    <ZonesEcran
+      erreur={erreur}
+      pied={
+        <Bouton type="button" onClick={onPremiereQuestion} disabled={enCours}>
+          Première question
+        </Bouton>
+      }
+    >
+     <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-[2vh]">
       {/* En-tête : titre du quiz */}
       <header className="min-w-0">
         <h1 className="line-clamp-2 text-[0.85em] leading-tight">{etat.titre}</h1>
@@ -64,7 +74,9 @@ export default function EcranAttente({ etat, participants, enCours, onPremiereQu
             </div>
           </div>
           <div className="shrink-0 text-center">
-            <p className="text-[0.5em] font-semibold text-vertClair">{window.location.host}</p>
+            <p className="text-[0.45em] font-semibold leading-tight">Scanne le QR code, ou va sur</p>
+            <p className="text-[0.7em] font-semibold leading-tight text-vertClair">{window.location.host}</p>
+            <p className="text-[0.45em] font-semibold leading-tight">et tape le code</p>
             <p className="font-titre text-[1.5em] font-normal leading-none tracking-[0.2em] text-vertClair">{etat.code}</p>
           </div>
         </section>
@@ -107,14 +119,7 @@ export default function EcranAttente({ etat, participants, enCours, onPremiereQu
         </section>
       </div>
 
-      {/* Pied de page : le bouton a sa propre ligne de grille, jamais recouvert */}
-      <footer className="flex justify-center text-[0.6em]">
-        <div className="w-full max-w-xl">
-          <Bouton type="button" onClick={onPremiereQuestion} disabled={enCours}>
-            Première question
-          </Bouton>
-        </div>
-      </footer>
     </div>
+    </ZonesEcran>
   )
 }

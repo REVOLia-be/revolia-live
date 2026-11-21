@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 import Bouton from '../Bouton'
+import ZonesEcran from './ZonesEcran'
 import ResultatsLibres from './ResultatsLibres'
 import { lettre, type EtatSession } from '../../lib/session'
 
 interface Props {
   etat: EtatSession
   enCours: boolean
+  erreur: string | null
   onSuivante: () => void
   onBilan: () => void
   onAction: (fonction: 'basculer_coup_de_coeur' | 'masquer_reponse', idReponse: string) => void
 }
 
-export default function EcranResultats({ etat, enCours, onSuivante, onBilan, onAction }: Props) {
+export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBilan, onAction }: Props) {
   const question = etat.question!
   const resultats = etat.resultats
   const dernier = question.ordre >= etat.nb_questions
@@ -26,58 +28,62 @@ export default function EcranResultats({ etat, enCours, onSuivante, onBilan, onA
   const repartition = resultats?.repartition ?? []
   const total = resultats?.nb_reponses ?? 0
 
+  const bouton = dernier ? (
+    <Bouton type="button" onClick={onBilan} disabled={enCours}>
+      Voir le bilan
+    </Bouton>
+  ) : (
+    <Bouton type="button" onClick={onSuivante} disabled={enCours}>
+      Question suivante
+    </Bouton>
+  )
+
   return (
-    <div className="flex flex-col gap-[3vh]">
-      <h1 className="text-[1.2em] leading-tight">{question.enonce}</h1>
+    <ZonesEcran code={etat.code} erreur={erreur} pied={bouton}>
+      <h1 className="shrink-0 line-clamp-3 text-[0.95em] leading-tight">{question.enonce}</h1>
 
       {question.type === 'qcm' && resultats ? (
         <>
-          <ul className="flex flex-col gap-[1.5vh]">
+          {/* Le libellé est AU-DESSUS de la barre : toujours blanc sur bleu violet, quel que soit le remplissage.
+              La barre ne sert qu'à mesurer. Bonne réponse : ✓, texte en gras, barre verte ; les autres restent neutres (pas de rouge). */}
+          <ul className="flex min-h-0 flex-1 flex-col justify-center gap-[1vh] overflow-hidden">
             {(question.choix ?? []).map((texte, i) => {
               const nombre = repartition[i] ?? 0
               const part = total > 0 ? (nombre / total) * 100 : 0
               const bonne = i === resultats.bonne_reponse
               return (
-                <li key={i} className={`flex items-center gap-[1.5vw] ${bonne ? '' : 'opacity-70'}`}>
-                  <span className="flex h-[1.6em] w-[1.6em] shrink-0 items-center justify-center rounded-pilule bg-blanc font-bold text-bleuViolet">
+                <li key={i} className="flex items-center gap-[1.5vw]">
+                  <span className="flex h-[1.4em] w-[1.4em] shrink-0 items-center justify-center rounded-pilule bg-blanc font-bold text-bleuViolet">
                     {lettre(i)}
                   </span>
-                  <div className="relative h-[1.9em] flex-1 overflow-hidden rounded-pilule border-2 border-blanc">
-                    <div
-                      className={`h-full rounded-pilule transition-[width] duration-1000 ease-out ${bonne ? 'bg-vertClair' : 'bg-blanc'}`}
-                      style={{ width: affiche ? `${part}%` : '0%' }}
-                    />
-                    <span className={`absolute inset-y-0 left-[1vw] flex items-center text-[0.65em] font-semibold ${part > 30 ? 'text-bleuViolet' : 'text-blanc'}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-[0.6em] leading-tight ${bonne ? 'font-bold' : 'font-normal'}`}>
                       {bonne ? '✓ ' : ''}
                       {texte}
-                    </span>
+                    </p>
+                    <div className="mt-[0.3vh] h-[0.5em] overflow-hidden rounded-pilule border-2 border-blanc">
+                      <div
+                        className={`h-full rounded-pilule transition-[width] duration-1000 ease-out ${bonne ? 'bg-vert' : 'bg-blanc/70'}`}
+                        style={{ width: affiche ? `${part}%` : '0%' }}
+                      />
+                    </div>
                   </div>
-                  <span className="w-[2.5em] text-right tabular-nums">{nombre}</span>
+                  <span className={`w-[2.5em] text-right tabular-nums ${bonne ? 'font-bold' : ''}`}>{nombre}</span>
                 </li>
               )
             })}
           </ul>
-          <p className="font-semibold text-vertClair">
+          <p className="shrink-0 font-semibold text-vertClair">
             {resultats.taux_reussite == null
               ? "Personne n'a répondu cette fois."
               : `${resultats.taux_reussite} % de bonnes réponses dans la salle`}
           </p>
         </>
       ) : resultats ? (
-        <ResultatsLibres question={question} resultats={resultats} onAction={onAction} />
+        <div className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden">
+          <ResultatsLibres question={question} resultats={resultats} onAction={onAction} />
+        </div>
       ) : null}
-
-      <div className="max-w-xl text-[0.6em]">
-        {dernier ? (
-          <Bouton type="button" onClick={onBilan} disabled={enCours}>
-            Voir le bilan
-          </Bouton>
-        ) : (
-          <Bouton type="button" onClick={onSuivante} disabled={enCours}>
-            Question suivante
-          </Bouton>
-        )}
-      </div>
-    </div>
+    </ZonesEcran>
   )
 }

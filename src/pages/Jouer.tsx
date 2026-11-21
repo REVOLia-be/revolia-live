@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import JaugeCollective from '../composants/JaugeCollective'
@@ -79,8 +79,8 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
     <>
       <JaugeCollective jauge={etat.jauge} variante="fine" />
       {connexionPerdue && (
-        <p role="status" className="mt-1 text-sm">
-          Connexion perdue. On réessaie…
+        <p role="status" className="mt-2 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
+          Connexion perdue. Attends quelques secondes avant de répondre : on réessaie tout seul.
         </p>
       )}
     </>
@@ -88,12 +88,22 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
 
   return (
     <MiseEnPageParticipant haut={haut}>
-      <Ecran etat={etat} decalage={decalage} recharger={recharger} />
+      <Ecran etat={etat} decalage={decalage} recharger={recharger} connexionPerdue={connexionPerdue} />
     </MiseEnPageParticipant>
   )
 }
 
-function Ecran({ etat, decalage, recharger }: { etat: EtatSession; decalage: number; recharger: () => void }) {
+function Ecran({
+  etat,
+  decalage,
+  recharger,
+  connexionPerdue,
+}: {
+  etat: EtatSession
+  decalage: number
+  recharger: () => void
+  connexionPerdue: boolean
+}) {
   const pseudo = etat.moi?.pseudo ?? ''
 
   if (etat.etat === 'attente') {
@@ -107,7 +117,7 @@ function Ecran({ etat, decalage, recharger }: { etat: EtatSession; decalage: num
 
   if (etat.etat === 'question' && etat.question) {
     // key : un nouvel écran (et un nouvel état local) à chaque nouvelle question
-    return <EcranQuestion key={etat.question.id} etat={etat} decalage={decalage} recharger={recharger} />
+    return <EcranQuestion key={etat.question.id} etat={etat} decalage={decalage} recharger={recharger} connexionPerdue={connexionPerdue} />
   }
 
   if (etat.etat === 'resultats' && etat.question) {
@@ -127,12 +137,30 @@ function Ecran({ etat, decalage, recharger }: { etat: EtatSession; decalage: num
   )
 }
 
-function EcranQuestion({ etat, decalage, recharger }: { etat: EtatSession; decalage: number; recharger: () => void }) {
+function EcranQuestion({
+  etat,
+  decalage,
+  recharger,
+  connexionPerdue,
+}: {
+  etat: EtatSession
+  decalage: number
+  recharger: () => void
+  connexionPerdue: boolean
+}) {
   const question = etat.question!
   const secondes = useSecondesRestantes(question.fin_reponses_le, decalage)
   const [envoyee, setEnvoyee] = useState(false)
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
+  const blocErreur = useRef<HTMLParagraphElement>(null)
+  // Pas de réseau : les boutons sont grisés (la réponse ne partirait pas).
+  const bloque = envoi || connexionPerdue
+
+  // Quand un envoi échoue, on amène le message à l'écran (il est affiché juste sous la question).
+  useEffect(() => {
+    if (erreur) blocErreur.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [erreur])
 
   const aRepondu = envoyee || etat.a_repondu === true
   const tempsEcoule = secondes === 0
@@ -184,13 +212,18 @@ function EcranQuestion({ etat, decalage, recharger }: { etat: EtatSession; decal
           </span>
         )}
       </div>
+      {erreur && (
+        <p ref={blocErreur} role="alert" className="rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
+          {erreur}
+        </p>
+      )}
       {question.type === 'qcm' && (
         <div className="flex flex-col gap-3">
           {(question.choix ?? []).map((texte, i) => (
             <button
               key={i}
               type="button"
-              disabled={envoi}
+              disabled={bloque}
               onClick={() => repondre(i)}
               className="flex min-h-[64px] w-full items-center gap-4 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-left text-lg font-semibold text-vertFonce transition-colors active:bg-vert active:text-blanc disabled:opacity-50"
             >
@@ -209,7 +242,7 @@ function EcranQuestion({ etat, decalage, recharger }: { etat: EtatSession; decal
               <button
                 key={n}
                 type="button"
-                disabled={envoi}
+                disabled={bloque}
                 onClick={() => repondre(n)}
                 className="flex min-h-[72px] items-center justify-center rounded-champ border-2 border-vert bg-blanc text-3xl font-bold text-vertFonce transition-colors active:bg-vert active:text-blanc disabled:opacity-50"
               >
@@ -228,17 +261,12 @@ function EcranQuestion({ etat, decalage, recharger }: { etat: EtatSession; decal
           maximum={30}
           ligneUnique
           indication="Un mot ou une courte expression"
-          envoi={envoi}
+          envoi={bloque}
           onEnvoyer={repondre}
         />
       )}
       {question.type === 'ouverte' && (
-        <ChampTexte maximum={280} indication="Écris ta réponse" envoi={envoi} onEnvoyer={repondre} />
-      )}
-      {erreur && (
-        <p role="alert" className="text-lg font-semibold">
-          {erreur}
-        </p>
+        <ChampTexte maximum={280} indication="Écris ta réponse" envoi={bloque} onEnvoyer={repondre} />
       )}
     </>
   )

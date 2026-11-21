@@ -20,7 +20,7 @@ function MurDeCartes({ resultats, onAction }: Pick<Props, 'resultats' | 'onActio
   const reponses = resultats.reponses ?? []
   if (reponses.length === 0) return <p className="text-vertClair">Aucune réponse cette fois.</p>
   return (
-    <ul className="grid max-h-[55vh] grid-cols-2 gap-[1.5vh] overflow-y-auto pr-[0.5vw] text-[0.6em] xl:grid-cols-3">
+    <ul className="grid max-h-full grid-cols-2 gap-[1.5vh] overflow-y-auto pr-[0.5vw] text-[0.6em] xl:grid-cols-3">
       {reponses.map((r) => (
         <li
           key={r.id}

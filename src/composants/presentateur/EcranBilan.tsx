@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Bouton from '../Bouton'
 import JaugeCollective from '../JaugeCollective'
 import Confettis from './Confettis'
+import ZonesEcran from './ZonesEcran'
 import NuageDeMots from './NuageDeMots'
 import type { Bilan, EtatSession, NomMention } from '../../lib/session'
 
@@ -30,10 +31,11 @@ function sectionsDuBilan(bilan: Bilan): Section[] {
 interface Props {
   etat: EtatSession
   enCours: boolean
+  erreur: string | null
   onTerminer: () => void
 }
 
-export default function EcranBilan({ etat, enCours, onTerminer }: Props) {
+export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props) {
   const bilan = etat.bilan
   const sections = bilan ? sectionsDuBilan(bilan) : []
   const derniere = sections.length - 1
@@ -52,12 +54,28 @@ export default function EcranBilan({ etat, enCours, onTerminer }: Props) {
   // `key` : chaque section rejoue son animation d'apparition.
   const section = sections[Math.min(indice, derniere)]
 
-  return (
-    <div className="flex flex-col gap-[3vh]">
-      {fini && <Confettis />}
-      <h1 className="text-[1.3em]">{etat.etat === 'terminee' ? 'Quiz terminé. Merci à tous !' : 'Bilan de la salle'}</h1>
+  const pied = fini ? (
+    etat.etat === 'terminee' ? (
+      <Link to="/formateur" className="block w-full">
+        <Bouton type="button">Retour à mes quiz</Bouton>
+      </Link>
+    ) : (
+      <Bouton type="button" onClick={onTerminer} disabled={enCours}>
+        Terminer
+      </Bouton>
+    )
+  ) : (
+    <Bouton type="button" onClick={() => setIndice((i) => i + 1)}>
+      Suite
+    </Bouton>
+  )
 
-      <div key={section} className="animation-apparition min-h-[38vh]">
+  return (
+    <ZonesEcran code={etat.code} erreur={erreur} pied={pied}>
+      {fini && <Confettis />}
+      <h1 className="shrink-0 text-[1.2em] leading-tight">{etat.etat === 'terminee' ? 'Quiz terminé. Merci à tous !' : 'Bilan de la salle'}</h1>
+
+      <div key={section} className="animation-apparition min-h-0 flex-1 overflow-hidden">
         {section === 'jauge' && <SectionJauge bilan={bilan} />}
         {section === 'chiffres' && <SectionChiffres bilan={bilan} />}
         {section === 'nuage' && (
@@ -69,25 +87,7 @@ export default function EcranBilan({ etat, enCours, onTerminer }: Props) {
         {section === 'coeurs' && <SectionCoeurs bilan={bilan} />}
         {section === 'mentions' && <SectionMentions bilan={bilan} />}
       </div>
-
-      <div className="flex max-w-xl items-center gap-[2vw] text-[0.6em]">
-        {!fini && (
-          <Bouton type="button" onClick={() => setIndice((i) => i + 1)}>
-            Suite
-          </Bouton>
-        )}
-        {fini &&
-          (etat.etat === 'terminee' ? (
-            <Link to="/formateur" className="w-full">
-              <Bouton type="button">Retour à mes quiz</Bouton>
-            </Link>
-          ) : (
-            <Bouton type="button" onClick={onTerminer} disabled={enCours}>
-              Terminer
-            </Bouton>
-          ))}
-      </div>
-    </div>
+    </ZonesEcran>
   )
 }
 

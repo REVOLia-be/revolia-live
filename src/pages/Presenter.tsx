@@ -135,36 +135,33 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
   )
 
   return (
-    <MiseEnPagePresentateur haut={haut} plein={etat.etat === 'attente'}>
+    <MiseEnPagePresentateur haut={haut} plein>
       {etat.etat === 'attente' && (
         <EcranAttente
           etat={etat}
           participants={participants}
           enCours={enCours}
+          erreur={erreurAction}
           onPremiereQuestion={() => piloter('ouvrir_question')}
           onExclure={exclure}
         />
       )}
       {etat.etat === 'question' && etat.question && (
-        <EcranQuestion etat={etat} secondes={secondes} enCours={enCours} onArreter={fermerQuestion} />
+        <EcranQuestion etat={etat} secondes={secondes} enCours={enCours} erreur={erreurAction} onArreter={fermerQuestion} />
       )}
       {etat.etat === 'resultats' && etat.question && (
         <EcranResultats
           key={etat.question.id}
           etat={etat}
           enCours={enCours}
+          erreur={erreurAction}
           onSuivante={() => piloter('ouvrir_question')}
           onBilan={() => piloter('passer_au_bilan')}
           onAction={actionReponse}
         />
       )}
       {(etat.etat === 'bilan' || etat.etat === 'terminee') && (
-        <EcranBilan etat={etat} enCours={enCours} onTerminer={() => piloter('terminer_session')} />
-      )}
-      {erreurAction && (
-        <p role="alert" className="mt-[2vh] text-[0.6em] font-semibold text-vertClair">
-          {erreurAction}
-        </p>
+        <EcranBilan etat={etat} enCours={enCours} erreur={erreurAction} onTerminer={() => piloter('terminer_session')} />
       )}
     </MiseEnPagePresentateur>
   )
