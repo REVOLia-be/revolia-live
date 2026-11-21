@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
@@ -173,6 +173,9 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-10">
+      <Link to="/formateur/sessions" className="self-start text-base text-vert underline">
+        Mes sessions passées →
+      </Link>
       <h1 className="text-4xl">Mes quiz</h1>
 
       {erreur && (

@@ -4,6 +4,7 @@ import Rejoindre from './pages/Rejoindre'
 import Jouer from './pages/Jouer'
 import ConnexionFormateur from './pages/ConnexionFormateur'
 import MesQuiz from './pages/MesQuiz'
+import MesSessions from './pages/MesSessions'
 import EditionQuiz from './pages/EditionQuiz'
 import Presenter from './pages/Presenter'
 import PageIntrouvable from './pages/PageIntrouvable'
@@ -16,6 +17,7 @@ export default function App() {
       <Route path="/jouer/:code" element={<Jouer />} />
       <Route path="/formateur/connexion" element={<ConnexionFormateur />} />
       <Route path="/formateur" element={<MesQuiz />} />
+      <Route path="/formateur/sessions" element={<MesSessions />} />
       <Route path="/formateur/quiz/:id" element={<EditionQuiz />} />
       <Route path="/presenter/:sessionId" element={<Presenter />} />
       <Route path="*" element={<PageIntrouvable />} />
