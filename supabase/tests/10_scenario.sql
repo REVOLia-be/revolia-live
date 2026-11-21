@@ -115,8 +115,8 @@ select test.doit_echouer(format('select public.repondre(%L, %L)', current_settin
 select test.verifier((select est_correcte is null from public.reponses), 'est_correcte reste vide pendant la question');
 select test.doit_echouer(format('select public.resultats_question(%L)', current_setting('test.q1')), 'fin de la question');
 select test.doit_echouer(format($$insert into public.reponses (session_id, question_id, participant_id, valeur, temps_ms)
-  values (%L, %L, (select id from public.participants), '2', 0)$$, current_setting('test.session'), current_setting('test.q1')), 'row-level security');
-update public.sessions set etat = 'bilan';
+  values (%L, %L, (select id from public.participants), '2', 0)$$, current_setting('test.session'), current_setting('test.q1')), 'permission denied');
+select test.doit_echouer($$update public.sessions set etat = 'bilan'$$, 'permission denied');
 select test.verifier((select etat from public.sessions) = 'question', 'participant ne peut pas modifier la session');
 reset role;
 -- B répond trop tard
