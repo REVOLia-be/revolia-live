@@ -179,3 +179,7 @@ select test.verifier((public.purger_donnees_expirees()->>'sessions_supprimees'):
 select test.verifier((select count(*) from public.reponses) = 0 and (select count(*) from public.participants) = 0, 'purge : cascade');
 select test.verifier((select count(*) from auth.users where is_anonymous) = 0, 'purge : identités anonymes supprimées');
 select test.verifier((select count(*) from auth.users) = 2, 'purge : comptes formateurs conservés');
+
+-- ===== Journal d'utilisation (survit à la purge) =====
+select test.verifier((select count(*) from public.journal_usage where type = 'session') = 1, 'journal : session lancée enregistrée');
+select test.verifier((select nb_reponses from public.journal_usage where type = 'session') = 12, 'journal : réponses comptées au bilan');
