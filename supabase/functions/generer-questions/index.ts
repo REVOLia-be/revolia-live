@@ -94,7 +94,7 @@ Règles par type :
 - "echelle" : auto-évaluation ou avis, à noter de 1 à 5 ; "libelle_min" et "libelle_max" décrivent les deux extrémités (40 caractères maximum chacun).
 
 Explication « Pourquoi ? » (champ "explication", pour chaque question) :
-- 2 à 3 phrases, 500 caractères maximum, en tutoiement, sans jargon, ton bienveillant (jamais de reproche, jamais « c'est évident ») ;
+- 2 à 4 phrases, 800 caractères maximum, en tutoiement, sans jargon, ton bienveillant (jamais de reproche, jamais « c'est évident ») ;
 - fidèle au document : n'ajoute aucun fait qui n'y figure pas ;
 - elle s'affiche à toute la salle après la fermeture de la question, que la personne ait juste ou non ;
 - pour un "qcm" : explique pourquoi la bonne réponse est juste et ce qui rend les mauvaises propositions trompeuses (sans moquer ceux qui les ont choisies) ;
@@ -131,7 +131,7 @@ function nettoyer(brut: unknown, niveau: Niveau) {
   }
 
   // Facultative pour le formateur : une explication absente ou vide reste simplement vide.
-  const explication = typeof q.explication === 'string' ? q.explication.trim().slice(0, 500) : ''
+  const explication = typeof q.explication === 'string' ? q.explication.trim().slice(0, 800) : ''
 
   const lib = (v: unknown) => (typeof v === 'string' ? v.trim().slice(0, 40) : '')
   const demandee = typeof q.duree_secondes === 'number' ? q.duree_secondes : 30

@@ -15,7 +15,7 @@ export const LIMITES = {
   titre: 120,
   description: 500,
   enonce: 300,
-  explication: 500,
+  explication: 800,
   choix: 200, // une proposition (stricte)
   choixConfort: 120, // au-delà : avertissement doux (écran projeté)
   enonceConfort: 160,
