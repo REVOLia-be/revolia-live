@@ -113,6 +113,9 @@ export default function EditeurQuestion({
             {question.enonce.trim().length}/{LIMITES.enonce}
           </span>
         </div>
+        {question.enonce.trim().length > LIMITES.enonceConfort && (
+          <p className="text-sm font-semibold">Longue pour l'écran projeté : essaie de raccourcir.</p>
+        )}
       </div>
 
       {question.type === 'qcm' && (
@@ -120,7 +123,8 @@ export default function EditeurQuestion({
           <legend className="mb-1 text-base font-semibold">Propositions (coche la bonne réponse)</legend>
           <div className="flex flex-col gap-2">
             {question.choix.map((c, i) => (
-              <div key={i} className="flex items-center gap-3">
+              <div key={i}>
+              <div className="flex items-center gap-3">
                 <input
                   type="radio"
                   name={`bonne-${question.id}`}
@@ -131,6 +135,7 @@ export default function EditeurQuestion({
                 />
                 <input
                   value={c}
+                  maxLength={LIMITES.choix}
                   onChange={(e) => changerChoix(i, e.target.value)}
                   className={CHAMP}
                   placeholder={`Proposition ${i + 1}`}
@@ -145,6 +150,17 @@ export default function EditeurQuestion({
                 >
                   Retirer
                 </button>
+              </div>
+              {c.trim().length > 0 && (
+                <p className="ml-9 mt-1 flex flex-wrap justify-between gap-x-4 text-sm">
+                  <span className="font-semibold">
+                    {c.trim().length > LIMITES.choixConfort ? "Longue pour l'écran projeté : essaie de raccourcir." : ''}
+                  </span>
+                  <span>
+                    {c.trim().length}/{LIMITES.choix}
+                  </span>
+                </p>
+              )}
               </div>
             ))}
           </div>

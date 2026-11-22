@@ -58,12 +58,20 @@ const SCHEMA_UNE = {
   additionalProperties: false,
 }
 
+// Coupe une proposition trop longue à la limite, de préférence à la fin d'un mot, avec des points de suspension.
+function coupeProprement(texte: string, max: number): string {
+  if (texte.length <= max) return texte
+  const coupe = texte.slice(0, max - 1)
+  const espace = coupe.lastIndexOf(' ')
+  return (espace > max * 0.6 ? coupe.slice(0, espace) : coupe).replace(/[\s,;:.]+$/, '') + '…'
+}
+
 const CONSIGNE_SYSTEME = `Tu aides un formateur en intelligence artificielle à préparer un quiz en direct pour une formation en présentiel.
 Le public est composé de débutants en IA (PME, indépendants, assistantes) : vocabulaire simple, ton bienveillant, jamais piégeux.
 À partir du document fourni, propose des questions fidèles à son contenu (n'invente rien qui n'y figure pas).
 
 Règles communes :
-- énoncé court et clair : 300 caractères maximum ;
+- énoncé court et clair : 160 caractères de préférence (300 au maximum) ;
 - durée suggérée en secondes, entre 15 et 120 (courte pour un QCM simple, plus longue pour une question ouverte) ;
 - respecte la répartition des types demandée ;
 - varie les parties du document couvertes ;
@@ -73,7 +81,7 @@ Règles communes :
   * "expert" : nuances, pièges fréquents, mises en situation.
 
 Règles par type :
-- "qcm" : une seule bonne réponse ; entre 2 et 6 propositions (4 de préférence) ; "bonne_reponse" = indice de la bonne proposition, en partant de 0 ; place la bonne réponse à des positions variées d'une question à l'autre.
+- "qcm" : une seule bonne réponse ; entre 2 et 6 propositions (4 de préférence), chacune de 100 caractères maximum (elles sont projetées sur grand écran : va droit au but) ; "bonne_reponse" = indice de la bonne proposition, en partant de 0 ; place la bonne réponse à des positions variées d'une question à l'autre.
   Distracteurs (mauvaises propositions), qui doivent être convaincants :
   * ce sont des erreurs ou idées reçues réellement fréquentes chez les débutants, adaptées au niveau demandé ;
   * même longueur approximative et même forme grammaticale que la bonne réponse (la bonne ne doit pas se repérer à sa forme) ;
@@ -113,7 +121,7 @@ function nettoyer(brut: unknown, niveau: Niveau) {
   let bonne: number | null = null
   if (type === 'qcm') {
     const propositions = (Array.isArray(q.choix) ? q.choix : [])
-      .map((c) => (typeof c === 'string' ? c.trim().slice(0, 200) : ''))
+      .map((c) => (typeof c === 'string' ? coupeProprement(c.trim(), 200) : ''))
     // Une proposition vide fausserait l'indice de la bonne réponse : on écarte la question.
     if (propositions.length < 2 || propositions.length > 6 || propositions.some((c) => !c)) return null
     const indice = q.bonne_reponse

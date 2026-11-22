@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import JaugeCollective from '../composants/JaugeCollective'
+import LogoMarque from '../composants/LogoMarque'
 import MiseEnPagePresentateur from '../composants/MiseEnPagePresentateur'
 import EcranAttente from '../composants/presentateur/EcranAttente'
 import EcranBilan from '../composants/presentateur/EcranBilan'
@@ -110,6 +111,80 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
     }
   }
 
+  // --- Télécommande de présentation : elle envoie des touches du clavier -----------------------
+  const [noir, setNoir] = useState(false) // voile « écran noir »
+  const [conseil, setConseil] = useState<string | null>(null)
+  const armee = useRef<{ action: 'arreter' | 'terminer'; jusqua: number } | null>(null)
+  const dernierGeste = useRef(0)
+  const courant = useRef({ etat, enCours, secondes, noir, fermerQuestion })
+  courant.current = { etat, enCours, secondes, noir, fermerQuestion }
+
+  useEffect(() => {
+    const SUIVANT = ['PageDown', 'ArrowRight', 'ArrowDown', ' ', 'Enter']
+    const PRECEDENT = ['PageUp', 'ArrowLeft', 'ArrowUp']
+    const ECRAN_NOIR = ['b', 'B', '.']
+    function demander(action: 'arreter' | 'terminer', message: string): boolean {
+      const maintenant = Date.now()
+      if (armee.current?.action === action && maintenant < armee.current.jusqua) {
+        armee.current = null
+        setConseil(null)
+        return true // deuxième pression dans le délai : on exécute
+      }
+      armee.current = { action, jusqua: maintenant + 3000 }
+      setConseil(message)
+      window.setTimeout(() => {
+        if (armee.current && Date.now() >= armee.current.jusqua) {
+          armee.current = null
+          setConseil(null)
+        }
+      }, 3050)
+      return false
+    }
+    function touche(e: KeyboardEvent) {
+      const suivant = SUIVANT.includes(e.key)
+      const precedent = PRECEDENT.includes(e.key)
+      const ecranNoir = ECRAN_NOIR.includes(e.key)
+      if (!suivant && !precedent && !ecranNoir) return // F5, Échap… : on ne touche à rien
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+      const cible = e.target instanceof HTMLElement ? e.target : null
+      // Champ de saisie, fenêtre de modération : les touches lui appartiennent.
+      if (cible?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
+      // Espace / Entrée sur un bouton qui a le focus : le navigateur clique déjà (pas de double déclenchement).
+      if ((e.key === ' ' || e.key === 'Enter') && cible?.closest('button, a') && !courant.current.noir) return
+      e.preventDefault()
+
+      const c = courant.current
+      if (ecranNoir) {
+        setNoir(!c.noir)
+        return
+      }
+      if (c.noir) {
+        setNoir(false) // retire le voile, sans action
+        dernierGeste.current = Date.now()
+        return
+      }
+      const maintenant = Date.now()
+      if (maintenant - dernierGeste.current < 700 || c.enCours) return
+      dernierGeste.current = maintenant
+
+      if (precedent) {
+        document.querySelector<HTMLButtonElement>('footer [data-commande="precedent"]')?.click()
+        return
+      }
+      if (c.etat?.etat === 'question') {
+        if (c.secondes !== null && c.secondes > 0 && !demander('arreter', 'Appuie encore pour arrêter la question')) return
+        void c.fermerQuestion()
+        return
+      }
+      const bouton = document.querySelector<HTMLButtonElement>('footer [data-commande]:not([data-commande="precedent"])')
+      if (!bouton || bouton.disabled) return
+      if (bouton.dataset.commande === 'terminer' && !demander('terminer', 'Appuie encore pour terminer le quiz')) return
+      bouton.click()
+    }
+    window.addEventListener('keydown', touche)
+    return () => window.removeEventListener('keydown', touche)
+  }, [])
+
   if (!etat) {
     return (
       <MiseEnPagePresentateur>
@@ -161,6 +236,16 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
         <EcranBilan etat={etat} enCours={enCours} erreur={erreurAction} onTerminer={() => piloter('terminer_session')} />
       )}
     </MiseEnPagePresentateur>
+    {conseil && (
+      <p role="status" className="fixed left-1/2 top-[1.2vh] z-40 -translate-x-1/2 rounded-pilule bg-blanc px-[2vw] py-[0.8vh] font-semibold text-bleuViolet" style={{ fontSize: 'max(16px, 2.2vh)' }}>
+        {conseil}
+      </p>
+    )}
+    {noir && (
+      <div aria-label="Écran noir" className="fixed inset-0 z-50 flex items-center justify-center bg-bleuViolet">
+        <LogoMarque variante="clair" className="h-[10vh]" />
+      </div>
+    )}
     </ConnexionPerdueContext.Provider>
   )
 }

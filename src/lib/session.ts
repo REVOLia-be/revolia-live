@@ -12,8 +12,9 @@ export type TypeQuestion = 'qcm' | 'nuage' | 'ouverte' | 'echelle'
 export interface Jauge {
   points: number
   maximum: number
-  paliers: number[] // fractions du maximum, ex. [0.4, 0.65, 0.85]
-  paliers_atteints: number
+  // Anciens champs (paliers en %), plus utilisés à l'écran : remplacés par les « moments de célébration ».
+  paliers?: number[]
+  paliers_atteints?: number
 }
 
 export interface QuestionCourante {
@@ -82,6 +83,8 @@ export interface EtatSession {
   question?: QuestionCourante
   a_repondu?: boolean // participant seulement
   resultats?: ResultatsQuestion
+  /** Message de célébration à afficher (état « résultats », question choisie par le formateur), sinon null. */
+  celebration?: string | null
   bilan?: Bilan
 }
 

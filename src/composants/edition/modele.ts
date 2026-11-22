@@ -16,6 +16,9 @@ export const LIMITES = {
   description: 500,
   enonce: 300,
   explication: 500,
+  choix: 200, // une proposition (stricte)
+  choixConfort: 120, // au-delà : avertissement doux (écran projeté)
+  enonceConfort: 160,
   libelleEchelle: 40,
   choixMin: 2,
   choixMax: 6,
@@ -33,9 +36,37 @@ export interface QuestionEdition {
   explication: string // « Pourquoi ? » facultatif, affiché après la fermeture de la question
 }
 
+// Moments de célébration : « après la question N, afficher ce message à toute la salle ».
+export interface CelebrationEdition {
+  apres: number // numéro de la question (à partir de 1)
+  message: string
+}
+export const CELEBRATIONS = { max: 10, messageMax: 140 }
+export const SUGGESTIONS_CELEBRATION = [
+  'La moitié du chemin, bravo à toute la salle !',
+  'Dernière ligne droite, on continue ensemble !',
+]
+
+export const celebrationsDepuisBase = (brut: unknown): CelebrationEdition[] =>
+  (Array.isArray(brut) ? brut : []).map((c: { apres_question?: number; message?: string }) => ({
+    apres: Number(c.apres_question) || 1,
+    message: String(c.message ?? ''),
+  }))
+export const celebrationsVersBase = (c: CelebrationEdition[]) =>
+  [...c].sort((x, y) => x.apres - y.apres).map((x) => ({ apres_question: x.apres, message: x.message.trim() }))
+
+export function validerCelebrations(c: CelebrationEdition[]): string | undefined {
+  if (c.length > CELEBRATIONS.max) return `Pas plus de ${CELEBRATIONS.max} moments de célébration.`
+  if (c.some((x) => !x.message.trim())) return 'Écris un message pour chaque moment de célébration, ou retire ceux qui sont vides.'
+  if (c.some((x) => x.message.trim().length > CELEBRATIONS.messageMax)) return `Un message est trop long (${CELEBRATIONS.messageMax} caractères maximum).`
+  if (new Set(c.map((x) => x.apres)).size !== c.length) return 'Deux messages sont placés après la même question : choisis une question différente pour chacun.'
+  return undefined
+}
+
 export interface QuizEdition {
   titre: string
   description: string
+  celebrations: CelebrationEdition[]
   questions: QuestionEdition[]
 }
 
@@ -121,6 +152,7 @@ export function validerQuestion(q: QuestionEdition): ErreursQuestion {
     if (q.choix.length < LIMITES.choixMin) e.choix = 'Ajoute au moins 2 propositions.'
     else if (q.choix.length > LIMITES.choixMax) e.choix = 'Pas plus de 6 propositions.'
     else if (q.choix.some((c) => !c.trim())) e.choix = 'Remplis chaque proposition, ou retire celles qui sont vides.'
+    else if (q.choix.some((c) => c.trim().length > LIMITES.choix)) e.choix = `Une proposition est trop longue (${LIMITES.choix} caractères maximum).`
     if (q.bonne === null || q.bonne < 0 || q.bonne >= q.choix.length) {
       e.bonne = 'Indique la bonne réponse en cochant une proposition.'
     }
@@ -140,9 +172,9 @@ export function aErreur(e: ErreursQuestion): boolean {
   return Object.keys(e).length > 0
 }
 
-export function validerQuiz(quiz: QuizEdition): { titre?: string; description?: string; questions: ErreursQuestion[]; ok: boolean } {
+export function validerQuiz(quiz: QuizEdition): { titre?: string; description?: string; celebrations?: string; questions: ErreursQuestion[]; ok: boolean } {
   const titre = quiz.titre.trim()
-  const r: { titre?: string; description?: string; questions: ErreursQuestion[]; ok: boolean } = {
+  const r: { titre?: string; description?: string; celebrations?: string; questions: ErreursQuestion[]; ok: boolean } = {
     questions: quiz.questions.map(validerQuestion),
     ok: true,
   }
@@ -151,6 +183,7 @@ export function validerQuiz(quiz: QuizEdition): { titre?: string; description?: 
   if (quiz.description.trim().length > LIMITES.description) {
     r.description = `La description est trop longue (${LIMITES.description} caractères maximum).`
   }
-  r.ok = !r.titre && !r.description && !r.questions.some(aErreur)
+  r.celebrations = validerCelebrations(quiz.celebrations)
+  r.ok = !r.titre && !r.description && !r.celebrations && !r.questions.some(aErreur)
   return r
 }

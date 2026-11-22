@@ -70,21 +70,6 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
   const enQuestion = etat?.etat === 'question' && etat.a_repondu !== true
   const secondes = useSecondesRestantes(enQuestion ? etat?.question?.fin_reponses_le : undefined, decalage)
 
-  // Palier franchi : on prévient aussi les téléphones (pas au premier chargement).
-  const paliers = etat?.jauge.paliers_atteints
-  const precedent = useRef<number | null>(null)
-  const [palierCelebre, setPalierCelebre] = useState<number | null>(null)
-  useEffect(() => {
-    if (paliers === undefined) return
-    const avant = precedent.current
-    precedent.current = paliers
-    if (avant !== null && paliers > avant) {
-      setPalierCelebre(paliers)
-      const minuteur = window.setTimeout(() => setPalierCelebre(null), 4000)
-      return () => window.clearTimeout(minuteur)
-    }
-  }, [paliers])
-
   if (!etat) {
     if (erreur) return <EcranProbleme message={erreur} onRetour={() => navigate(`/rejoindre/${code}`)} />
     return (
@@ -136,11 +121,6 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
           </span>
         )}
       </div>
-      {palierCelebre !== null && (
-        <p role="status" className="mt-2 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-center text-xl font-bold text-vert">
-          🎉 La salle débloque le palier {palierCelebre} !
-        </p>
-      )}
       {connexionPerdue && (
         <p role="status" className="mt-2 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
           Connexion perdue. Attends quelques secondes avant de répondre : on réessaie tout seul.
@@ -270,7 +250,7 @@ function EcranQuestion({
 
   return (
     <>
-      <h1 className="text-2xl leading-snug">{question.enonce}</h1>
+      <h1 className="text-2xl leading-snug [overflow-wrap:anywhere]">{question.enonce}</h1>
       {erreur && (
         <p ref={blocErreur} role="alert" className="rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
           {erreur}
@@ -289,7 +269,7 @@ function EcranQuestion({
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pilule bg-vert text-blanc">
                 {lettre(i)}
               </span>
-              <span>{texte}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{texte}</span>
             </button>
           ))}
         </div>
@@ -336,6 +316,18 @@ function libelleReponse(question: NonNullable<EtatSession['question']>, valeur: 
   if (question.type === 'qcm' && typeof valeur === 'number') return `${lettre(valeur)} — ${question.choix?.[valeur] ?? ''}`
   if (question.type === 'echelle') return `${valeur} sur 5`
   return `« ${valeur} »`
+}
+
+// Moment de célébration choisi par le formateur : petit encart festif (le halo se coupe en mode « moins d'animations »).
+function EncartCelebration({ texte }: { texte: string }) {
+  return (
+    <p role="status" className="halo-bonne-reponse flex items-center gap-3 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-bold leading-snug text-vert [overflow-wrap:anywhere]">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="shrink-0">
+        <path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2 6.3 20.3l1.2-6.4L2.8 9.5l6.4-.8z" />
+      </svg>
+      <span className="min-w-0">{texte}</span>
+    </p>
+  )
 }
 
 // Une ligne « choix » : la réponse de la personne ou la bonne réponse (icône + libellé, jamais la couleur seule).
@@ -428,6 +420,7 @@ function EcranResultats({ etat }: { etat: EtatSession }) {
         )}
         <LigneChoix lettreChoix={lettre(idxBonne)} texte={question.choix?.[idxBonne] ?? ''} bonne aussiMienne={juste} />
       </div>
+      {etat.celebration && <EncartCelebration texte={etat.celebration} />}
       <BlocPourquoi texte={resultats.explication} />
       <Attente etat={etat} />
     </>
@@ -547,7 +540,6 @@ function EcranBilanParticipant({ etat }: { etat: EtatSession }) {
   const pseudo = (etat.moi?.pseudo ?? '').replace(/-/g, '\u2011')
   const mes = (etat.bilan?.mentions ?? []).filter((m) => m.pseudo === etat.moi?.pseudo)
   const jauge = etat.bilan?.jauge ?? etat.jauge
-  const nbPaliers = jauge.paliers.length
   const part = jauge.maximum > 0 ? Math.min(100, Math.max(0, Math.round((jauge.points / jauge.maximum) * 100))) : 0
 
   return (
@@ -581,21 +573,6 @@ function EcranBilanParticipant({ etat }: { etat: EtatSession }) {
         >
           <div className="h-full rounded-pilule bg-vert" style={{ width: `${part}%` }} />
         </div>
-        {nbPaliers > 0 && (
-          <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold">
-            {Array.from({ length: nbPaliers }, (_, i) => (
-              <span
-                key={i}
-                className={`inline-flex h-5 w-5 items-center justify-center rounded-pilule border-2 border-vert text-[11px] font-bold ${i < jauge.paliers_atteints ? 'bg-vert text-blanc' : ''}`}
-              >
-                {i + 1}
-              </span>
-            ))}
-            <span className="ml-1">
-              {jauge.paliers_atteints} palier{jauge.paliers_atteints > 1 ? 's' : ''} sur {nbPaliers} débloqué{jauge.paliers_atteints > 1 ? 's' : ''}
-            </span>
-          </p>
-        )}
       </section>
 
       {mes.map((m, i) => (

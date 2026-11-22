@@ -232,7 +232,7 @@ function CarteQuiz({
     try {
       const { data: original, error } = await supabase
         .from('quiz')
-        .select('formateur_id, titre, description')
+        .select('formateur_id, titre, description, celebrations')
         .eq('id', quiz.id)
         .single()
       if (error) throw error
@@ -240,7 +240,7 @@ function CarteQuiz({
       const titre = original.titre.slice(0, 120 - suffixe.length) + suffixe
       const { data: copie, error: e2 } = await supabase
         .from('quiz')
-        .insert({ formateur_id: original.formateur_id, titre, description: original.description })
+        .insert({ formateur_id: original.formateur_id, titre, description: original.description, celebrations: original.celebrations })
         .select('id')
         .single()
       if (e2) throw e2

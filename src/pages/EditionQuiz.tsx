@@ -5,6 +5,7 @@ import Carte from '../composants/Carte'
 import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import EditeurQuestion from '../composants/edition/EditeurQuestion'
+import PanneauCelebrations from '../composants/edition/PanneauCelebrations'
 import PanneauLancement from '../composants/edition/PanneauLancement'
 import PanneauPropositions from '../composants/edition/PanneauPropositions'
 import {
@@ -13,6 +14,8 @@ import {
   depuisLigne,
   dupliquerQuestion,
   nouvelleQuestion,
+  celebrationsDepuisBase,
+  celebrationsVersBase,
   validerQuiz,
   versLigne,
   type LigneQuestion,
@@ -84,7 +87,7 @@ function Editeur({ quizId }: { quizId: string }) {
     setChargement('en_cours')
     const { data: q, error } = await supabase
       .from('quiz')
-      .select('id, titre, description')
+      .select('id, titre, description, celebrations')
       .eq('id', quizId)
       .maybeSingle()
     if (error) {
@@ -109,6 +112,7 @@ function Editeur({ quizId }: { quizId: string }) {
     const charge: QuizEdition = {
       titre: q.titre,
       description: q.description ?? '',
+      celebrations: celebrationsDepuisBase(q.celebrations),
       questions: ((lignes ?? []) as LigneQuestion[]).map(depuisLigne),
     }
     idsEnBase.current = new Set(charge.questions.map((x) => x.id))
@@ -208,6 +212,7 @@ function Editeur({ quizId }: { quizId: string }) {
         .update({
           titre: aEnregistrer.titre.trim(),
           description: aEnregistrer.description.trim() || null,
+          celebrations: celebrationsVersBase(aEnregistrer.celebrations),
           modifie_le: new Date().toISOString(),
         })
         .eq('id', quizId)
@@ -301,6 +306,13 @@ function Editeur({ quizId }: { quizId: string }) {
           )}
         </div>
       </Carte>
+
+      <PanneauCelebrations
+        celebrations={courant.celebrations}
+        questions={courant.questions}
+        erreur={afficherErreurs ? valid.celebrations : undefined}
+        onChange={(celebrations) => changer({ celebrations })}
+      />
 
       {panneauIA ? (
         <PanneauPropositions

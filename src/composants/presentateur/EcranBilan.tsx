@@ -66,12 +66,12 @@ export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props)
   const termine = fini && etat.etat === 'terminee'
   const boutonPrecedent =
     indice > 0 ? (
-      <Bouton type="button" variante="secondaire" onClick={() => setIndice((i) => Math.max(0, i - 1))}>
+      <Bouton type="button" variante="secondaire" data-commande="precedent" onClick={() => setIndice((i) => Math.max(0, i - 1))}>
         Précédent
       </Bouton>
     ) : null
   const boutonSuite = !fini ? (
-    <Bouton type="button" onClick={() => setIndice((i) => i + 1)}>
+    <Bouton type="button" data-commande="suivant" onClick={() => setIndice((i) => i + 1)}>
       Suite
     </Bouton>
   ) : termine ? (
@@ -81,7 +81,7 @@ export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props)
       </Bouton>
     </Link>
   ) : (
-    <Bouton type="button" onClick={onTerminer} disabled={enCours}>
+    <Bouton type="button" data-commande="terminer" onClick={onTerminer} disabled={enCours}>
       Terminer
     </Bouton>
   )
@@ -121,18 +121,11 @@ export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props)
 }
 
 function SectionJauge({ bilan }: { bilan: Bilan }) {
-  const { paliers, paliers_atteints } = bilan.jauge
   return (
     <div className="flex flex-col gap-[3vh]">
       <p className="font-semibold text-vertClair">Ce que la salle a construit ensemble</p>
       <JaugeCollective jauge={bilan.jauge} variante="grande" />
-      <p className="text-[1.1em] font-bold">
-        {paliers.length === 0
-          ? 'Bravo à toute la salle !'
-          : paliers_atteints >= paliers.length
-            ? `Tous les paliers sont atteints (${paliers.length} sur ${paliers.length}) !`
-            : `${paliers_atteints} palier${paliers_atteints > 1 ? 's' : ''} atteint${paliers_atteints > 1 ? 's' : ''} sur ${paliers.length}`}
-      </p>
+      <p className="text-[1.1em] font-bold">Bravo à toute la salle !</p>
     </div>
   )
 }

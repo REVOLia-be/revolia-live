@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import Bouton from '../Bouton'
 import ZonesEcran from './ZonesEcran'
+import ContenuAjuste from './ContenuAjuste'
 import type { EtatSession, ParticipantListe } from '../../lib/session'
 
 interface Props {
@@ -54,15 +55,21 @@ export default function EcranAttente({ etat, participants, enCours, erreur, onPr
     <ZonesEcran
       erreur={erreur}
       pied={
-        <Bouton type="button" onClick={onPremiereQuestion} disabled={enCours}>
+        <>
+        <Bouton type="button" data-commande="suivant" onClick={onPremiereQuestion} disabled={enCours}>
           Première question
         </Bouton>
+        <p className="text-center text-[max(14px,0.9em)] opacity-80">Astuce : tu peux avancer avec ta télécommande ou les flèches du clavier.</p>
+        </>
       }
     >
      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-[2vh]">
       {/* En-tête : titre du quiz */}
       <header className="min-w-0">
-        <h1 className="line-clamp-2 text-[0.85em] leading-tight">{etat.titre}</h1>
+        {/* Titre long : la police se réduit pour que tout le titre reste visible (jamais coupé). */}
+        <ContenuAjuste cle={`titre-${etat.titre}`} plancherEm={0.85} className="max-h-[20vh]">
+          {() => <h1 data-texte-principal className="text-[0.85em] leading-tight [overflow-wrap:anywhere]">{etat.titre}</h1>}
+        </ContenuAjuste>
       </header>
 
       {/* Zone principale : deux colonnes de même largeur */}

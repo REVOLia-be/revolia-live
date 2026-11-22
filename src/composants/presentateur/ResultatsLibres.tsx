@@ -6,23 +6,25 @@ interface Props {
   question: QuestionCourante
   resultats: ResultatsQuestion
   onAction: (fonction: 'basculer_coup_de_coeur' | 'masquer_reponse', idReponse: string) => void
+  /** Disposition resserrée (« Pourquoi ? » passé sous les résultats) : le mur de cartes passe sur 3 colonnes. */
+  dense?: boolean
 }
 
 // Résultats des questions sans bonne réponse : nuage, ouverte, échelle.
-export default function ResultatsLibres({ question, resultats, onAction }: Props) {
+export default function ResultatsLibres({ question, resultats, onAction, dense = false }: Props) {
   if (question.type === 'nuage') return <NuageDeMots mots={resultats.mots ?? []} />
   if (question.type === 'echelle') return <BarresEchelle question={question} resultats={resultats} />
-  return <MurDeCartes resultats={resultats} onAction={onAction} />
+  return <MurDeCartes resultats={resultats} onAction={onAction} dense={dense} />
 }
 
 // Mur de cartes : texte seul, pas de pseudo. Les deux actions sont réservées au formateur (discrètes).
-function MurDeCartes({ resultats, onAction }: Pick<Props, 'resultats' | 'onAction'>) {
+function MurDeCartes({ resultats, onAction, dense }: Pick<Props, 'resultats' | 'onAction' | 'dense'>) {
   const reponses = resultats.reponses ?? []
   if (reponses.length === 0) return <p className="text-vertClair">Aucune réponse cette fois.</p>
   return (
-    <div className="flex min-h-0 flex-col gap-[1vh]">
-      <p className="shrink-0 text-[0.5em] text-vertClair">Clique sur ♡ pour mettre une réponse à l'honneur au bilan</p>
-    <ul className="grid min-h-0 max-h-full grid-cols-2 gap-[1.5vh] overflow-y-auto pr-[0.5vw] text-[0.6em] xl:grid-cols-3">
+    <div className="flex flex-col gap-[1vh]">
+      <p className="shrink-0 [font-size:max(0.5em,14px)] text-vertClair">Clique sur ♡ pour mettre une réponse à l'honneur au bilan</p>
+    <ul className={`grid grid-cols-2 gap-[1.5vh] text-[0.6em] ${dense ? 'grid-cols-3' : 'xl:grid-cols-3'}`}>
       {reponses.map((r) => (
         <li
           key={r.id}
@@ -30,7 +32,7 @@ function MurDeCartes({ resultats, onAction }: Pick<Props, 'resultats' | 'onActio
             r.coup_de_coeur ? 'border-vertClair bg-blanc text-bleuViolet' : 'border-blanc'
           }`}
         >
-          <p className="break-words">{r.texte}</p>
+          <p data-texte-principal className="[overflow-wrap:anywhere]">{r.texte}</p>
           <div className="flex items-center justify-end gap-[1vw] text-[0.7em]">
             <button
               type="button"
@@ -65,7 +67,7 @@ function BarresEchelle({ question, resultats }: Pick<Props, 'question' | 'result
   return (
     <div className="flex items-end justify-center gap-[5vw]">
       <div className="flex flex-1 flex-col gap-[1vh]">
-        <div className="flex h-[32vh] items-end gap-[1.5vw]">
+        <div className="flex h-[6em] items-end gap-[1.5vw]">
           {repartition.map((nombre, i) => (
             <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-[0.5vh]">
               <span className="tabular-nums text-[0.8em] font-semibold">{nombre}</span>
@@ -83,7 +85,7 @@ function BarresEchelle({ question, resultats }: Pick<Props, 'question' | 'result
             </span>
           ))}
         </div>
-        <div className="flex justify-between text-[0.5em] text-vertClair">
+        <div className="flex justify-between gap-[2vw] [font-size:max(0.5em,14px)] text-vertClair">
           <span>{question.libelle_min}</span>
           <span className="text-right">{question.libelle_max}</span>
         </div>
