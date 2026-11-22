@@ -6,6 +6,8 @@ import ConnexionFormateur from './pages/ConnexionFormateur'
 import MesQuiz from './pages/MesQuiz'
 import MesSessions from './pages/MesSessions'
 import Utilisation from './pages/Utilisation'
+import Connexions from './pages/Connexions'
+import ConsentementOAuth from './pages/ConsentementOAuth'
 import EditionQuiz from './pages/EditionQuiz'
 import Admin from './pages/Admin'
 import Presenter from './pages/Presenter'
@@ -21,6 +23,8 @@ export default function App() {
       <Route path="/formateur" element={<MesQuiz />} />
       <Route path="/formateur/sessions" element={<MesSessions />} />
       <Route path="/formateur/utilisation" element={<Utilisation />} />
+      <Route path="/formateur/connexions" element={<Connexions />} />
+      <Route path="/oauth/consent" element={<ConsentementOAuth />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/formateur/quiz/:id" element={<EditionQuiz />} />
       <Route path="/presenter/:sessionId" element={<Presenter />} />
