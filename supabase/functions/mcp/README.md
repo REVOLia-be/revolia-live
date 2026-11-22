@@ -1,3 +1,5 @@
+> **Adresse à utiliser dans Claude / ChatGPT : `https://quiz.revolia.be/mcp`** (relais Cloudflare Pages, `functions/_middleware.js`, vers l'adresse Supabase ci-dessous, qui reste utilisable).
+
 # mcp
 
 Serveur MCP distant de REVOLia Live (Edge Function Supabase). Il permet à Claude ou ChatGPT (connecteur personnalisé) de créer et gérer les quiz d'un formateur, et de relire les résultats agrégés de ses sessions.

@@ -32,7 +32,16 @@ import {
 // ---------------------------------------------------------------------------
 const URL_PROJET = (Deno.env.get('SUPABASE_URL') ?? 'https://igwnzxyraxxyaprdkkvu.supabase.co').replace(/\/$/, '')
 const URL_PUBLIQUE = (Deno.env.get('MCP_PUBLIC_URL') ?? `${URL_PROJET}/functions/v1/mcp`).replace(/\/$/, '')
-const URL_METADONNEES = `${URL_PUBLIQUE}/.well-known/oauth-protected-resource`
+// Adresse personnalisée : le relais Cloudflare de quiz.revolia.be/mcp ajoute l'en-tête
+// `X-REVOLia-Proxy: 1`. La valeur annoncée est fixe (liste blanche) : un en-tête forgé
+// ne peut pas faire annoncer une autre adresse.
+const URL_PERSONNALISEE = 'https://quiz.revolia.be/mcp'
+function urlPublique(req: Request): string {
+  return req.headers.get('x-revolia-proxy') === '1' ? URL_PERSONNALISEE : URL_PUBLIQUE
+}
+function urlMetadonnees(base: string): string {
+  return `${base}/.well-known/oauth-protected-resource`
+}
 const SERVEUR_AUTORISATION = `${URL_PROJET}/auth/v1`
 const URL_APPLI = 'https://quiz.revolia.be'
 const lienQuiz = (id: string) => `${URL_APPLI}/formateur/quiz/${id}`
@@ -56,11 +65,11 @@ function json(statut: number, corps: unknown, extra: Record<string, string> = {}
 // ---------------------------------------------------------------------------
 // Métadonnées de ressource protégée (RFC 9728)
 // ---------------------------------------------------------------------------
-function metadonneesRessource(): Response {
+function metadonneesRessource(base: string): Response {
   return json(
     200,
     {
-      resource: URL_PUBLIQUE,
+      resource: base,
       authorization_servers: [SERVEUR_AUTORISATION],
       bearer_methods_supported: ['header'],
       scopes_supported: ['openid', 'email', 'profile'],
@@ -82,9 +91,9 @@ function sousChemin(pathname: string): string | null {
 // ---------------------------------------------------------------------------
 // Authentification
 // ---------------------------------------------------------------------------
-function nonAutorise(description: string, invalide: boolean): Response {
+function nonAutorise(description: string, invalide: boolean, base: string): Response {
   const defi =
-    `Bearer ${invalide ? `error="invalid_token", error_description="${description}", ` : ''}resource_metadata="${URL_METADONNEES}"`
+    `Bearer ${invalide ? `error="invalid_token", error_description="${description}", ` : ''}resource_metadata="${urlMetadonnees(base)}"`
   return json(401, { error: invalide ? 'invalid_token' : 'unauthorized', error_description: description }, { 'WWW-Authenticate': defi })
 }
 
@@ -94,9 +103,10 @@ interface Identite {
 }
 
 async function authentifier(req: Request): Promise<Identite | Response> {
+  const base = urlPublique(req)
   const entete = req.headers.get('Authorization') ?? ''
   const m = /^Bearer\s+(\S+)$/i.exec(entete)
-  if (!m) return nonAutorise("Connexion requise : aucun jeton d'accès fourni.", false)
+  if (!m) return nonAutorise("Connexion requise : aucun jeton d'accès fourni.", false, base)
   const jeton = m[1]
 
   const verif = createClient(URL_PROJET, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
@@ -106,9 +116,9 @@ async function authentifier(req: Request): Promise<Identite | Response> {
   if (error && (error.status ?? 0) >= 500) {
     return json(503, { error: 'temporarily_unavailable', error_description: "Le service de connexion est momentanément indisponible. Réessaie dans un instant." })
   }
-  if (error || !data.user) return nonAutorise("Le jeton d'accès est invalide ou expiré. Reconnecte-toi.", true)
+  if (error || !data.user) return nonAutorise("Le jeton d'accès est invalide ou expiré. Reconnecte-toi.", true, base)
   // Les participants des quiz sont des comptes anonymes : ils n'ont rien à faire ici.
-  if (data.user.is_anonymous) return nonAutorise("Ce jeton appartient à un compte anonyme. Connecte-toi avec ton compte formateur.", true)
+  if (data.user.is_anonymous) return nonAutorise("Ce jeton appartient à un compte anonyme. Connecte-toi avec ton compte formateur.", true, base)
   return { jeton, uid: data.user.id }
 }
 
@@ -693,7 +703,7 @@ Deno.serve(async (req) => {
   // Métadonnées de ressource protégée : publiques (formes `/.well-known/oauth-protected-resource` et suffixée).
   if (chemin.startsWith('/.well-known/oauth-protected-resource')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return json(405, { error: 'method_not_allowed' })
-    return metadonneesRessource()
+    return metadonneesRessource(urlPublique(req))
   }
   if (chemin !== '' && chemin !== '/') return json(404, { error: 'not_found' })
 
