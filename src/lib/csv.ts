@@ -14,6 +14,13 @@ export interface LigneExport {
   repondu_le: string
 }
 
+// Propositions d'une question QCM par numéro d'ordre : sert à nommer « Photo A », « Photo B »… les propositions
+// en photos qui n'ont pas de légende (la base renvoie alors un texte vide).
+export interface PropositionsPhotos {
+  choix: string[]
+  images_choix: string[] | null
+}
+
 const EN_TETES = [
   'N° question',
   'Type',
@@ -56,7 +63,36 @@ function formaterTemps(valeur: number | string | null): string {
   return n.toFixed(1).replace('.', ',')
 }
 
-export function construireCsv(lignes: LigneExport[]): string {
+const photoN = (i: number) => `Photo ${String.fromCharCode(65 + i)}`
+
+// Texte de la réponse d'une personne à une question en photos : la légende si elle existe, sinon « Photo A ».
+// `reponse` est la légende renvoyée par la base (QCM multiple : légendes séparées par « ; », dans l'ordre des propositions).
+// Si plusieurs propositions sans légende sont possibles pour un même texte vide, on les cite toutes (« Photo A ou Photo C »).
+export function reponsePhoto(reponse: string | null, type: LigneExport['question_type'], p: PropositionsPhotos | undefined): string | null {
+  if (!p || !p.images_choix) return reponse
+  const legende = (i: number) => (p.choix[i] ?? '').trim()
+  const nom = (i: number) => legende(i) || photoN(i)
+  if (type === 'qcm') {
+    const texte = (reponse ?? '').trim()
+    const candidats = p.choix.map((_, i) => i).filter((i) => legende(i) === texte)
+    return candidats.length === 0 ? reponse : candidats.map(nom).join(' ou ')
+  }
+  if (type === 'qcm_multiple') {
+    const morceaux = (reponse ?? '').split(' ; ').map((m) => m.trim())
+    let courant = -1
+    const noms = morceaux.map((m) => {
+      let i = courant + 1
+      while (i < p.choix.length && legende(i) !== m) i++
+      if (i >= p.choix.length) return m || '?'
+      courant = i
+      return nom(i)
+    })
+    return noms.join(' ; ')
+  }
+  return reponse
+}
+
+export function construireCsv(lignes: LigneExport[], photos: Map<number, PropositionsPhotos> = new Map()): string {
   const corps = lignes.map((l) =>
     [
       String(l.question_ordre),
@@ -64,7 +100,7 @@ export function construireCsv(lignes: LigneExport[]): string {
       l.question ?? '',
       l.pseudo ?? '',
       l.table_nom ?? '',
-      l.reponse ?? '',
+      reponsePhoto(l.reponse, l.question_type, photos.get(l.question_ordre)) ?? '',
       l.est_correcte === null || l.est_correcte === undefined ? '' : l.est_correcte ? 'Oui' : 'Non',
       formaterTemps(l.temps_secondes),
       formaterDateCsv(l.repondu_le),

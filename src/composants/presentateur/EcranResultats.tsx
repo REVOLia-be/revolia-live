@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Bouton from '../Bouton'
+import Photo from '../Photo'
 import { Ampoule, Coche } from '../Pictos'
 import { Etincelle } from './elementsCelebration'
 import ZonesEcran from './ZonesEcran'
@@ -69,6 +70,8 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
     if (celebre) marquerJoue(cleCelebration)
   }, [celebre, cleCelebration])
 
+  const aEnonce = question.enonce.trim().length > 0
+  const imagesChoix = question.images_choix ?? null
   const explication = resultats?.explication?.trim() ?? ''
   const repartition = resultats?.repartition ?? []
   const total = resultats?.nb_reponses ?? 0
@@ -100,14 +103,28 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
           const rangee = dessous ? 'flex flex-col gap-[2vh]' : 'flex items-start gap-[3vw]'
           return (
             <>
-              <div className="shrink-0">
-                {!compact && (
-                  <p className="[font-size:max(0.5em,14px)] font-semibold text-vertClair">
-                    Question {question.ordre} sur {etat.nb_questions}
-                    {multiple && ` · ${nbBonnesChoix} bonnes réponses`}
-                  </p>
+              <div className="flex shrink-0 items-center gap-[2vw]">
+                {question.image && (
+                  <Photo
+                    chemin={question.image}
+                    alt="Photo de la question"
+                    fond="projete"
+                    className={`shrink-0 rounded-champ border-2 border-blanc ${compact ? 'h-[2.6em] w-[3.4em]' : 'h-[3.4em] w-[4.4em]'}`}
+                  />
                 )}
-                <h1 data-texte-principal className="text-[0.95em] leading-tight [overflow-wrap:anywhere]">{question.enonce}</h1>
+                <div className="min-w-0">
+                  {(!compact || !aEnonce) && (
+                    <p className="[font-size:max(0.5em,14px)] font-semibold text-vertClair">
+                      Question {question.ordre} sur {etat.nb_questions}
+                      {multiple && ` · ${nbBonnesChoix} bonnes réponses`}
+                    </p>
+                  )}
+                  {aEnonce ? (
+                    <h1 data-texte-principal className="text-[0.95em] leading-tight [overflow-wrap:anywhere]">{question.enonce}</h1>
+                  ) : (
+                    <h1 className="sr-only">Question {question.ordre} sur {etat.nb_questions}</h1>
+                  )}
+                </div>
               </div>
 
               {etat.celebration && <BandeauCelebration texte={etat.celebration} anime={jouer} />}
@@ -130,10 +147,19 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
                             >
                               {lettre(i)}
                             </span>
+                            {imagesChoix?.[i] && (
+                              <Photo
+                                chemin={imagesChoix[i]}
+                                alt={`Proposition ${lettre(i)}`}
+                                fond="projete"
+                                ajuste="cover"
+                                className={`h-[1.9em] w-[1.9em] shrink-0 rounded-champ border-2 ${bonne ? 'border-vert' : 'border-blanc'}`}
+                              />
+                            )}
                             <div className="min-w-0 flex-1">
                               <p className={`flex items-center gap-[0.8vw] text-[0.6em] leading-tight ${bonne ? 'font-bold' : 'font-normal'}`}>
                                 {bonne && <Coche taille={24} className="h-[1em] w-[1em] shrink-0" />}
-                                <span data-texte-principal className="min-w-0 [overflow-wrap:anywhere]">{texte}</span>
+                                <span data-texte-principal className="min-w-0 [overflow-wrap:anywhere]">{imagesChoix && !texte.trim() ? `Photo ${lettre(i)}` : texte}</span>
                                 {bonne && (
                                   <span className="shrink-0 rounded-pilule bg-vert px-[0.7em] py-[0.05em] text-[0.7em] font-bold">Bonne réponse</span>
                                 )}

@@ -171,3 +171,15 @@
   .celeb-tel { animation: celeb-fondu 0.6s ease both; }
   .celeb-onde { display: none; }
 }
+
+/* Photos des questions : espace réservé (fond neutre) pendant le chargement, pour que la mise en page ne bouge pas. */
+.photo-fond-clair { background-color: color-mix(in srgb, var(--couleur-vert-fonce) 8%, var(--couleur-blanc)); }
+.photo-fond-projete { background-color: color-mix(in srgb, var(--couleur-blanc) 12%, var(--couleur-bleu-violet)); }
+@keyframes photo-attente {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.photo-chargement { background-color: color-mix(in srgb, currentColor 10%, transparent); animation: photo-attente 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .photo-chargement { animation: none; }
+}

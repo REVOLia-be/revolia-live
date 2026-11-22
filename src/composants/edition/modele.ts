@@ -37,6 +37,10 @@ export interface QuestionEdition {
   libelleMax: string
   duree: number
   explication: string // « Pourquoi ? » facultatif, affiché après la fermeture de la question
+  image: string | null // chemin de la photo de la question dans le stockage (facultatif)
+  // « Propositions en photos » (QCM) : null = option désactivée ; sinon une entrée par proposition, '' = photo pas encore ajoutée.
+  // Toujours de la même longueur que `choix` et dans le même ordre.
+  imagesChoix: string[] | null
 }
 
 // Moments de célébration : « après la question N, afficher ce message à toute la salle ».
@@ -88,11 +92,45 @@ export function nouvelleQuestion(type: TypeQuestion): QuestionEdition {
     libelleMax: '',
     duree: 30,
     explication: '',
+    image: null,
+    imagesChoix: null,
   }
 }
 
 export function dupliquerQuestion(q: QuestionEdition): QuestionEdition {
-  return { ...q, id: crypto.randomUUID(), choix: [...q.choix], bonnes: [...q.bonnes] }
+  // Les fichiers photo sont partagés avec l'original (seuls les chemins sont copiés).
+  return { ...q, id: crypto.randomUUID(), choix: [...q.choix], bonnes: [...q.bonnes], imagesChoix: q.imagesChoix ? [...q.imagesChoix] : null }
+}
+
+export const lettrePhoto = (i: number) => String.fromCharCode(65 + i)
+
+// Active ou retire l'option « Propositions en photos » (le retrait efface les chemins des photos de la question).
+export function basculerPhotosChoix(q: QuestionEdition, actif: boolean): QuestionEdition {
+  if (!estQcm(q.type)) return q
+  return { ...q, imagesChoix: actif ? q.choix.map((_, i) => q.imagesChoix?.[i] ?? '') : null }
+}
+
+// Ajoute une proposition vide (et sa photo manquante si les propositions sont en photos).
+export function ajouterProposition(q: QuestionEdition): QuestionEdition {
+  if (q.choix.length >= LIMITES.choixMax) return q
+  return { ...q, choix: [...q.choix, ''], imagesChoix: q.imagesChoix ? [...q.imagesChoix, ''] : null }
+}
+
+// Retire la proposition `i` : la bonne réponse et les photos suivent.
+export function retirerProposition(q: QuestionEdition, i: number): QuestionEdition {
+  if (q.choix.length <= LIMITES.choixMin || i < 0 || i >= q.choix.length) return q
+  let bonne = q.bonne
+  if (bonne !== null) {
+    if (bonne === i) bonne = null
+    else if (bonne > i) bonne = bonne - 1
+  }
+  return {
+    ...q,
+    choix: q.choix.filter((_, j) => j !== i),
+    imagesChoix: q.imagesChoix ? q.imagesChoix.filter((_, j) => j !== i) : null,
+    bonne,
+    bonnes: q.bonnes.filter((b) => b !== i).map((b) => (b > i ? b - 1 : b)),
+  }
 }
 
 // Passe une question à choix entre « une bonne réponse » et « plusieurs bonnes réponses » sans toucher aux propositions.
@@ -114,6 +152,7 @@ function reordonner(q: QuestionEdition, ordre: number[]): QuestionEdition {
   return {
     ...q,
     choix: ordre.map((ancien) => q.choix[ancien]),
+    imagesChoix: q.imagesChoix ? ordre.map((ancien) => q.imagesChoix?.[ancien] ?? '') : null,
     bonne: q.bonne !== null && nouvelIndice.has(q.bonne) ? (nouvelIndice.get(q.bonne) as number) : q.bonne,
     bonnes: q.bonnes.map((b) => nouvelIndice.get(b) ?? b).sort((a, b) => a - b),
   }
@@ -156,6 +195,8 @@ export interface LigneQuestion {
   libelle_max: string | null
   duree_secondes: number
   explication: string | null
+  image_question?: string | null
+  images_choix?: string[] | null
 }
 
 export function depuisLigne(l: LigneQuestion): QuestionEdition {
@@ -171,6 +212,8 @@ export function depuisLigne(l: LigneQuestion): QuestionEdition {
     libelleMax: l.libelle_max ?? '',
     duree: l.duree_secondes,
     explication: l.explication ?? '',
+    image: l.image_question ?? null,
+    imagesChoix: l.images_choix ?? null,
   }
 }
 
@@ -192,6 +235,8 @@ export function versLigne(q: QuestionEdition, quizId: string, ordre: number) {
     libelle_max: echelle && q.libelleMax.trim() ? q.libelleMax.trim() : null,
     duree_secondes: q.duree,
     explication: q.explication.trim() ? q.explication.trim() : null,
+    image_question: q.image || null,
+    images_choix: qcm && q.imagesChoix ? q.imagesChoix.map((c) => c.trim()) : null,
   }
 }
 
@@ -201,19 +246,23 @@ export interface ErreursQuestion {
   bonne?: string
   libelles?: string
   explication?: string
+  photosChoix?: string
 }
 
 export function validerQuestion(q: QuestionEdition): ErreursQuestion {
   const e: ErreursQuestion = {}
   const enonce = q.enonce.trim()
-  if (!enonce) e.enonce = 'Écris la question.'
+  if (!enonce && !q.image) e.enonce = 'Écris la question, ou ajoute une photo.'
   else if (enonce.length > LIMITES.enonce) e.enonce = `La question est trop longue (${LIMITES.enonce} caractères maximum).`
 
   if (estQcm(q.type)) {
     if (q.choix.length < LIMITES.choixMin) e.choix = 'Ajoute au moins 2 propositions.'
     else if (q.choix.length > LIMITES.choixMax) e.choix = 'Pas plus de 6 propositions.'
-    else if (q.choix.some((c) => !c.trim())) e.choix = 'Remplis chaque proposition, ou retire celles qui sont vides.'
+    else if (!q.imagesChoix && q.choix.some((c) => !c.trim())) e.choix = 'Remplis chaque proposition, ou retire celles qui sont vides.'
     else if (q.choix.some((c) => c.trim().length > LIMITES.choix)) e.choix = `Une proposition est trop longue (${LIMITES.choix} caractères maximum).`
+    if (q.imagesChoix && !e.choix && (q.imagesChoix.length !== q.choix.length || q.imagesChoix.some((c) => !c))) {
+      e.photosChoix = 'Ajoute une photo à chaque proposition, ou désactive « Propositions en photos ».'
+    }
     if (q.type === 'qcm') {
       if (q.bonne === null || q.bonne < 0 || q.bonne >= q.choix.length) {
         e.bonne = 'Indique la bonne réponse en cochant une proposition.'

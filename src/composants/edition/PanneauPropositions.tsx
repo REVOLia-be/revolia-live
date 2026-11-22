@@ -64,6 +64,8 @@ function versEdition(p: Proposition): QuestionEdition {
     libelleMax: p.libelle_max ?? '',
     duree: p.duree_secondes,
     explication: p.explication ?? '',
+    image: null,
+    imagesChoix: null,
   }
 }
 

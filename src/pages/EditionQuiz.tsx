@@ -26,6 +26,7 @@ import {
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
 import { dupliquerQuiz } from '../lib/quiz'
+import { photosEnregistrees } from '../lib/photos'
 import { supabase } from '../lib/supabase'
 
 const CHAMP =
@@ -86,6 +87,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
   const [erreurCopie, setErreurCopie] = useState<string | null>(null)
   const [panneauIA, setPanneauIA] = useState(false) // panneau « Proposer des questions »
   const [ouvertes, setOuvertes] = useState<string[]>([]) // questions dépliées (les autres sont repliées sur leur titre)
+  const [envoisPhotos, setEnvoisPhotos] = useState(0) // photos en cours d'envoi : on n'enregistre pas avant la fin
 
   const charger = useCallback(async () => {
     setChargement('en_cours')
@@ -112,7 +114,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
     }
     const { data: lignes, error: erreurQ } = await supabase
       .from('questions')
-      .select('id, ordre, type, enonce, choix, bonne_reponse, bonnes_reponses, annoncer_nombre, libelle_min, libelle_max, duree_secondes, explication')
+      .select('id, ordre, type, enonce, choix, bonne_reponse, bonnes_reponses, annoncer_nombre, libelle_min, libelle_max, duree_secondes, explication, image_question, images_choix')
       .eq('quiz_id', quizId)
       .order('ordre')
     if (erreurQ) {
@@ -189,6 +191,10 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
   function changerQuestion(i: number, q: QuestionEdition) {
     changer({ questions: courant.questions.map((x, j) => (j === i ? q : x)) })
   }
+  // Modification faite à partir de l'état le plus récent (les envois de photos se terminent après coup).
+  function majQuestionParId(id: string, f: (q: QuestionEdition) => QuestionEdition) {
+    setQuiz((prec) => (prec ? { ...prec, questions: prec.questions.map((x) => (x.id === id ? f(x) : x)) } : prec))
+  }
   function deplacer(i: number, delta: -1 | 1) {
     const j = i + delta
     if (j < 0 || j >= courant.questions.length) return
@@ -251,6 +257,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
         aEnregistrer.questions.forEach((q) => idsEnBase.current.add(q.id))
       }
 
+      photosEnregistrees(aEnregistrer.questions.flatMap((q) => [q.image, ...(q.imagesChoix ?? [])]))
       setReference(instantane(aEnregistrer))
       setAfficherErreurs(false)
     } catch (e) {
@@ -385,6 +392,9 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
                 onDescendre={() => deplacer(i, 1)}
                 onDupliquer={() => dupliquer(i)}
                 onSupprimer={() => setConfirmationSuppr(q.id)}
+                formateurId={moi}
+                majFonction={(f) => majQuestionParId(q.id, f)}
+                signalerEnvoi={(d) => setEnvoisPhotos((n) => Math.max(0, n + d))}
                 onReplier={aDesErreurs ? undefined : () => setOuvertes((o) => o.filter((x) => x !== q.id))}
               />
             ) : (
@@ -393,7 +403,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
                   <p className="text-base">
                     Question {i + 1} · {libelleType}
                   </p>
-                  <p className="truncate text-lg font-semibold">{q.enonce.trim() || 'Question sans texte'}</p>
+                  <p className="truncate text-lg font-semibold">{q.enonce.trim() || (q.image ? 'Question en photo' : 'Question sans texte')}</p>
                 </div>
                 <button
                   type="button"
@@ -484,8 +494,8 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
               <p className="text-base">Tout est enregistré.</p>
             )}
           </div>
-          <Bouton type="button" className="sm:w-auto" onClick={() => void enregistrer()} disabled={enregistrement || !modifie}>
-            {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+          <Bouton type="button" className="sm:w-auto" onClick={() => void enregistrer()} disabled={enregistrement || !modifie || envoisPhotos > 0}>
+            {enregistrement ? 'Enregistrement…' : envoisPhotos > 0 ? 'Envoi des photos…' : 'Enregistrer'}
           </Bouton>
         </div>
       </div>

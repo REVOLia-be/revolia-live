@@ -21,7 +21,11 @@ export interface QuestionCourante {
   id: string
   ordre: number // commence à 1
   type: TypeQuestion
-  enonce: string
+  enonce: string // peut être vide si la question est une photo
+  /** Photo de la question : chemin dans le stockage « quiz-images ». */
+  image?: string | null
+  /** Une photo par proposition (QCM) ; `choix[i]` devient une légende facultative. */
+  images_choix?: string[] | null
   choix: string[] | null
   libelle_min: string | null
   libelle_max: string | null

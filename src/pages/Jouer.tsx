@@ -10,6 +10,8 @@ import { assurerConnexionAnonyme } from '../lib/auth'
 import { codeErreur, messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
 import { lireSalle } from '../lib/memoire'
+import { usePrechargement } from '../lib/photos'
+import { GrilleChoixPhotos, PhotoQuestion, TuileResultat } from '../composants/PhotosParticipant'
 import { lettre, useEtatSession, type EtatSession, type MonScore, type NomMention } from '../lib/session'
 
 // Étape 1 : s'assurer qu'on est connecté et retrouver l'identifiant de la session.
@@ -69,6 +71,8 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
   const { etat, decalage, erreur, connexionPerdue, recharger } = useEtatSession(sessionId)
   const enQuestion = etat?.etat === 'question' && etat.a_repondu !== true
   const secondes = useSecondesRestantes(enQuestion ? etat?.question?.fin_reponses_le : undefined, decalage)
+  // Les photos de la question sont demandées dès que l'état arrive : elles sont déjà là quand l'écran s'affiche.
+  usePrechargement(etat?.question?.image, etat?.question?.images_choix)
 
   if (!etat) {
     if (erreur) return <EcranProbleme message={erreur} onRetour={() => navigate(`/rejoindre/${code}`)} />
@@ -251,13 +255,21 @@ function EcranQuestion({
 
   return (
     <>
-      <h1 className="text-2xl leading-snug [overflow-wrap:anywhere]">{question.enonce}</h1>
+      {question.image && <PhotoQuestion chemin={question.image} />}
+      {question.enonce.trim() ? (
+        <h1 className="text-2xl leading-snug [overflow-wrap:anywhere]">{question.enonce}</h1>
+      ) : (
+        <h1 className="sr-only">Question {question.ordre}</h1>
+      )}
       {erreur && (
         <p ref={blocErreur} role="alert" className="rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
           {erreur}
         </p>
       )}
-      {question.type === 'qcm' && (
+      {question.type === 'qcm' && question.images_choix && (
+        <GrilleChoixPhotos choix={question.choix ?? []} images={question.images_choix} bloque={bloque} onChoisir={(i) => repondre(i)} />
+      )}
+      {question.type === 'qcm' && !question.images_choix && (
         <div className="flex flex-col gap-3">
           {(question.choix ?? []).map((texte, i) => (
             <button
@@ -317,10 +329,12 @@ function EcranQuestion({
 
 // Rappel lisible de ce que la personne a envoyé.
 function libelleReponse(question: NonNullable<EtatSession['question']>, valeur: number | number[] | string): string {
+  // Proposition en photo sans légende : « A » seulement (pas de tiret orphelin).
+  const nom = (i: number) => (question.choix?.[i]?.trim() ? `${lettre(i)} — ${question.choix[i]}` : question.images_choix ? `Photo ${lettre(i)}` : lettre(i))
   if (question.type === 'qcm_multiple' && Array.isArray(valeur)) {
-    return [...valeur].sort((a, b) => a - b).map((i) => `${lettre(i)} — ${question.choix?.[i] ?? ''}`).join(' ; ')
+    return [...valeur].sort((a, b) => a - b).map(nom).join(' ; ')
   }
-  if (typeof valeur === 'number' && question.type === 'qcm') return `${lettre(valeur)} — ${question.choix?.[valeur] ?? ''}`
+  if (typeof valeur === 'number' && question.type === 'qcm') return nom(valeur)
   if (question.type === 'echelle') return `${valeur} sur 5`
   return `« ${valeur} »`
 }
@@ -423,12 +437,23 @@ function EcranResultats({ etat }: { etat: EtatSession }) {
       ) : (
         <Statut pastille="ampoule" titre="Pas eu le temps" sous="Pas grave, à la prochaine question !" />
       )}
-      <div className="flex flex-col gap-2">
-        {aRepondu && !juste && maReponse !== null && (
-          <LigneChoix lettreChoix={lettre(maReponse)} texte={question.choix?.[maReponse] ?? ''} />
-        )}
-        <LigneChoix lettreChoix={lettre(idxBonne)} texte={question.choix?.[idxBonne] ?? ''} bonne aussiMienne={juste} />
-      </div>
+      {question.images_choix ? (
+        <div className="grid grid-cols-2 gap-3">
+          {aRepondu && !juste && maReponse !== null && question.images_choix[maReponse] && (
+            <TuileResultat i={maReponse} chemin={question.images_choix[maReponse]} legende={question.choix?.[maReponse] ?? ''} bonne={false} mienne />
+          )}
+          {question.images_choix[idxBonne] && (
+            <TuileResultat i={idxBonne} chemin={question.images_choix[idxBonne]} legende={question.choix?.[idxBonne] ?? ''} bonne mienne={juste} />
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {aRepondu && !juste && maReponse !== null && (
+            <LigneChoix lettreChoix={lettre(maReponse)} texte={question.choix?.[maReponse] ?? ''} />
+          )}
+          <LigneChoix lettreChoix={lettre(idxBonne)} texte={question.choix?.[idxBonne] ?? ''} bonne aussiMienne={juste} />
+        </div>
+      )}
       {etat.celebration && <EncartCelebration texte={etat.celebration} />}
       <BlocPourquoi texte={resultats.explication} />
       <Attente etat={etat} />
@@ -466,6 +491,10 @@ function ChoixMultiples({
       }}
     >
       <p className="text-lg font-bold text-vert">{attendu !== null ? `Choisis ${attendu} réponses` : 'Plusieurs réponses possibles'}</p>
+      {question.images_choix && (
+        <GrilleChoixPhotos choix={question.choix ?? []} images={question.images_choix} multiple choisis={choisis} bloque={bloque || envoye} onChoisir={basculer} />
+      )}
+      {!question.images_choix && (
       <div role="group" aria-label="Propositions" className="flex flex-col gap-3">
         {(question.choix ?? []).map((texte, i) => {
           const coche = choisis.includes(i)
@@ -495,6 +524,7 @@ function ChoixMultiples({
           )
         })}
       </div>
+      )}
       <p role="status" className="text-base font-semibold text-discret">
         {attendu !== null ? `${choisis.length} / ${attendu} choisie${choisis.length > 1 ? 's' : ''}` : `${choisis.length} choisie${choisis.length > 1 ? 's' : ''}`}
       </p>
@@ -573,11 +603,19 @@ function EcranResultatsMultiple({ etat }: { etat: EtatSession }) {
       ) : (
         <Statut pastille="ampoule" titre="Pas eu le temps" sous="Pas grave, à la prochaine question !" />
       )}
-      <div className="flex flex-col gap-2">
-        {(question.choix ?? []).map((texte, i) => (
-          <LigneMultiple key={i} lettreChoix={lettre(i)} texte={texte} bonne={bonnes.includes(i)} mienne={mes.includes(i)} />
-        ))}
-      </div>
+      {question.images_choix ? (
+        <div className="grid grid-cols-2 gap-3">
+          {question.images_choix.map((chemin, i) => (
+            <TuileResultat key={i} i={i} chemin={chemin} legende={question.choix?.[i] ?? ''} bonne={bonnes.includes(i)} mienne={mes.includes(i)} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {(question.choix ?? []).map((texte, i) => (
+            <LigneMultiple key={i} lettreChoix={lettre(i)} texte={texte} bonne={bonnes.includes(i)} mienne={mes.includes(i)} />
+          ))}
+        </div>
+      )}
       {etat.celebration && <EncartCelebration texte={etat.celebration} />}
       <BlocPourquoi texte={resultats.explication} />
       <Attente etat={etat} />

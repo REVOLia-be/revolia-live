@@ -35,6 +35,7 @@ function deborde(zone: HTMLElement, contenu: HTMLElement): boolean {
   const blocs = contenu.querySelectorAll<HTMLElement>('*')
   for (let i = 0; i < blocs.length; i++) {
     const b = blocs[i]
+    if (b.classList.contains('sr-only')) continue // texte réservé aux lecteurs d'écran : boîte de 1 px, sans effet visible
     if (b.clientHeight > 0 && b.scrollHeight > b.clientHeight + TOLERANCE_TEXTE) return true
     if (b.clientWidth > 0 && b.scrollWidth > b.clientWidth + TOLERANCE_TEXTE) return true
   }

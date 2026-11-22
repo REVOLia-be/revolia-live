@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 
 // Copie complète d'un quiz (description, célébrations, questions et leurs réglages).
+// Les photos ne sont pas recopiées : la copie pointe vers les mêmes fichiers (c'est pourquoi on ne supprime jamais une photo déjà enregistrée).
 // La copie appartient à `proprietaireId` : pour un formateur, lui-même ; pour un admin qui
 // duplique le quiz d'un autre, l'admin. Si quelque chose échoue, aucune copie à moitié faite ne reste.
 export async function dupliquerQuiz(quizId: string, proprietaireId: string): Promise<string> {
@@ -23,7 +24,7 @@ export async function dupliquerQuiz(quizId: string, proprietaireId: string): Pro
     nouveauId = copie.id as string
     const { data: lignes, error: e3 } = await supabase
       .from('questions')
-      .select('ordre, type, enonce, choix, bonne_reponse, bonnes_reponses, annoncer_nombre, libelle_min, libelle_max, duree_secondes, explication')
+      .select('ordre, type, enonce, choix, bonne_reponse, bonnes_reponses, annoncer_nombre, libelle_min, libelle_max, duree_secondes, explication, image_question, images_choix')
       .eq('quiz_id', quizId)
       .order('ordre')
     if (e3) throw e3

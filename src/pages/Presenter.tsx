@@ -14,6 +14,7 @@ import { appelerRpc } from '../lib/api'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
+import { usePrechargement } from '../lib/photos'
 import { useEtatSession, type ParticipantListe } from '../lib/session'
 
 export default function Presenter() {
@@ -56,6 +57,7 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
 
   const question = etat?.etat === 'question' ? etat.question : undefined
   const secondes = useSecondesRestantes(question?.fin_reponses_le, decalage)
+  usePrechargement(etat?.question?.image, etat?.question?.images_choix)
 
   async function fermerQuestion() {
     if (!question || questionFermee.current === question.id) return

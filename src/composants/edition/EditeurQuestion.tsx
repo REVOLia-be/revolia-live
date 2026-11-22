@@ -1,5 +1,12 @@
 import Carte from '../Carte'
+import Photo from '../Photo'
+import BlocPhoto from './BlocPhoto'
+import { MESSAGE_DROITS, supprimerPhotoSiOrpheline } from '../../lib/photos'
 import {
+  ajouterProposition,
+  basculerPhotosChoix,
+  lettrePhoto,
+  retirerProposition,
   convertirQcm,
   deplacerProposition,
   melangerPropositions,
@@ -39,6 +46,9 @@ export default function EditeurQuestion({
   onDupliquer,
   onSupprimer,
   onReplier,
+  formateurId,
+  majFonction,
+  signalerEnvoi,
 }: {
   numero: number
   total: number
@@ -51,28 +61,34 @@ export default function EditeurQuestion({
   onDupliquer: () => void
   onSupprimer: () => void
   onReplier?: () => void
+  formateurId: string
+  /** Modification « à partir de l'état le plus récent » (indispensable pour les envois de photos, qui finissent plus tard). */
+  majFonction: (f: (q: QuestionEdition) => QuestionEdition) => void
+  signalerEnvoi: (delta: 1 | -1) => void
 }) {
   const err = afficherErreurs ? erreurs : {}
   const libelleType = TYPES.find((t) => t.valeur === question.type)?.libelle ?? ''
   const multiple = question.type === 'qcm_multiple'
   const maj = (partiel: Partial<QuestionEdition>) => onChange({ ...question, ...partiel })
 
+  const enPhotos = question.imagesChoix !== null
+
   function changerChoix(i: number, valeur: string) {
     maj({ choix: question.choix.map((c, j) => (j === i ? valeur : c)) })
   }
   function ajouterChoix() {
-    if (question.choix.length >= LIMITES.choixMax) return
-    maj({ choix: [...question.choix, ''] })
+    onChange(ajouterProposition(question))
   }
   function retirerChoix(i: number) {
-    if (question.choix.length <= LIMITES.choixMin) return
-    let bonne = question.bonne
-    if (bonne !== null) {
-      if (bonne === i) bonne = null
-      else if (bonne > i) bonne = bonne - 1
+    void supprimerPhotoSiOrpheline(question.imagesChoix?.[i], formateurId)
+    onChange(retirerProposition(question, i))
+  }
+  function basculerEnPhotos(actif: boolean) {
+    if (!actif && question.imagesChoix?.some(Boolean)) {
+      if (!window.confirm('Les photos des propositions seront retirées de cette question. Continuer ?')) return
+      question.imagesChoix.forEach((c) => void supprimerPhotoSiOrpheline(c, formateurId))
     }
-    const bonnes = question.bonnes.filter((b) => b !== i).map((b) => (b > i ? b - 1 : b))
-    maj({ choix: question.choix.filter((_, j) => j !== i), bonne, bonnes })
+    onChange(basculerPhotosChoix(question, actif))
   }
   function basculerBonne(i: number) {
     maj({ bonnes: question.bonnes.includes(i) ? question.bonnes.filter((b) => b !== i) : [...question.bonnes, i] })
@@ -107,7 +123,7 @@ export default function EditeurQuestion({
 
       <div>
         <label className="mb-1 block text-base font-semibold" htmlFor={`enonce-${question.id}`}>
-          Ta question
+          Ta question{question.image ? ' (facultatif avec une photo)' : ''}
         </label>
         <textarea
           id={`enonce-${question.id}`}
@@ -116,7 +132,7 @@ export default function EditeurQuestion({
           value={question.enonce}
           onChange={(e) => maj({ enonce: e.target.value })}
           className={CHAMP}
-          placeholder="Écris ta question ici"
+          placeholder={question.image ? 'Écris ta question ici, ou laisse vide pour montrer seulement la photo' : 'Écris ta question ici'}
         />
         <div className="flex justify-between gap-4">
           <Message texte={err.enonce} />
@@ -127,6 +143,22 @@ export default function EditeurQuestion({
         {question.enonce.trim().length > LIMITES.enonceConfort && (
           <p className="text-sm font-semibold">Longue pour l'écran projeté : essaie de raccourcir.</p>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-base font-semibold">Photo (facultatif)</p>
+        <BlocPhoto
+          id={`question-${question.id}`}
+          chemin={question.image}
+          genre="question"
+          formateurId={formateurId}
+          libelle="photo de la question"
+          alt={`Photo de la question ${numero}`}
+          onChoisie={(c) => majFonction((q) => ({ ...q, image: c }))}
+          onRetiree={() => maj({ image: null })}
+          signalerEnvoi={signalerEnvoi}
+        />
+        <p className="text-sm">{MESSAGE_DROITS}</p>
       </div>
 
       {estQcm(question.type) && (
@@ -156,13 +188,18 @@ export default function EditeurQuestion({
                     aria-label={`Proposition ${i + 1} : bonne réponse`}
                   />
                 )}
+                {enPhotos && (
+                  <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-pilule bg-vert text-base font-bold text-blanc">
+                    {lettrePhoto(i)}
+                  </span>
+                )}
                 <input
                   value={c}
                   maxLength={LIMITES.choix}
                   onChange={(e) => changerChoix(i, e.target.value)}
                   className={CHAMP}
-                  placeholder={`Proposition ${i + 1}`}
-                  aria-label={`Proposition ${i + 1}`}
+                  placeholder={enPhotos ? 'Légende (facultative)' : `Proposition ${i + 1}`}
+                  aria-label={enPhotos ? `Légende de la proposition ${lettrePhoto(i)}` : `Proposition ${i + 1}`}
                 />
                 <div className="flex shrink-0 gap-1">
                   <button
@@ -194,6 +231,24 @@ export default function EditeurQuestion({
                   Retirer
                 </button>
               </div>
+              {enPhotos && (
+                <div className="ml-9 mt-2">
+                  <BlocPhoto
+                    id={`choix-${question.id}-${i}`}
+                    chemin={question.imagesChoix?.[i]}
+                    genre="choix"
+                    formateurId={formateurId}
+                    libelle={`photo de la proposition ${lettrePhoto(i)}`}
+                    alt={`Proposition ${lettrePhoto(i)}`}
+                    compact
+                    onChoisie={(chemin) =>
+                      majFonction((q) => (q.imagesChoix ? { ...q, imagesChoix: q.imagesChoix.map((x, j) => (j === i ? chemin : x)) } : q))
+                    }
+                    onRetiree={() => maj({ imagesChoix: (question.imagesChoix ?? []).map((x, j) => (j === i ? '' : x)) })}
+                    signalerEnvoi={signalerEnvoi}
+                  />
+                </div>
+              )}
               {c.trim().length > 0 && (
                 <p className="ml-9 mt-1 flex flex-wrap justify-between gap-x-4 text-sm">
                   <span className="font-semibold">
@@ -208,7 +263,23 @@ export default function EditeurQuestion({
             ))}
           </div>
           <Message texte={err.choix} />
+          <Message texte={err.photosChoix} />
           <Message texte={err.bonne} />
+          <div className="mt-3">
+            <label className="flex min-h-[44px] items-center gap-3 text-base font-semibold">
+              <input
+                type="checkbox"
+                checked={enPhotos}
+                onChange={(e) => basculerEnPhotos(e.target.checked)}
+                className="h-6 w-6 shrink-0 accent-vert"
+                aria-describedby={`aide-photos-${question.id}`}
+              />
+              Propositions en photos
+            </label>
+            <p id={`aide-photos-${question.id}`} className="ml-9 text-sm">
+              Chaque proposition devient une photo (obligatoire pour toutes). Le texte devient une légende facultative. {MESSAGE_DROITS}
+            </p>
+          </div>
           {multiple && (
             <div className="mt-3">
               <label className="flex min-h-[44px] items-center gap-3 text-base font-semibold">
@@ -338,19 +409,41 @@ function Apercu({ question }: { question: QuestionEdition }) {
     <details className="rounded-champ border border-vertClair/60 px-4 py-2">
       <summary className="cursor-pointer text-base font-semibold">Aperçu côté participant</summary>
       <div className="mx-auto mt-3 flex max-w-xs flex-col gap-2 rounded-carte border border-vertClair/60 p-4">
-        <p className="text-lg font-semibold">{question.enonce.trim() || 'Ta question apparaîtra ici'}</p>
+        {question.image && <Photo chemin={question.image} alt="Photo de la question" className="h-44 w-full rounded-champ" />}
+        {(question.enonce.trim() || !question.image) && (
+          <p className="text-lg font-semibold">{question.enonce.trim() || 'Ta question apparaîtra ici'}</p>
+        )}
         {question.type === 'qcm_multiple' && (
           <p className="text-base font-semibold">
             {question.annoncerNombre && question.bonnes.length >= 2 ? `Choisis ${question.bonnes.length} réponses` : 'Plusieurs réponses possibles'}
           </p>
         )}
-        {question.type === 'qcm' &&
+        {question.imagesChoix && (
+          <div className="grid grid-cols-2 gap-2">
+            {question.choix.map((c, i) => (
+              <div key={i} className="flex flex-col gap-1 rounded-champ border-2 border-vert p-1.5">
+                {question.imagesChoix?.[i] ? (
+                  <Photo chemin={question.imagesChoix[i]} alt={`Proposition ${lettrePhoto(i)}`} ajuste="contain" className="aspect-square w-full rounded-lg" />
+                ) : (
+                  <div className="photo-fond-clair flex aspect-square w-full items-center justify-center rounded-lg text-center text-sm">Photo à ajouter</div>
+                )}
+                <p className="flex items-start gap-1.5 text-sm font-semibold">
+                  <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-pilule bg-vert text-blanc">
+                    {lettrePhoto(i)}
+                  </span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{c.trim()}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {question.type === 'qcm' && !question.imagesChoix &&
           question.choix.map((c, i) => (
             <div key={i} className={cases}>
               {c.trim() || `Proposition ${i + 1}`}
             </div>
           ))}
-        {question.type === 'qcm_multiple' &&
+        {question.type === 'qcm_multiple' && !question.imagesChoix &&
           question.choix.map((c, i) => (
             <div key={i} className={`${cases} gap-3`}>
               <span aria-hidden className="h-5 w-5 shrink-0 rounded-sm border-2 border-vert" />
