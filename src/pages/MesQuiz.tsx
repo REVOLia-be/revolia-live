@@ -215,6 +215,9 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
         <Link to="/formateur/utilisation" className="self-start text-base text-vert underline">
           Utilisation →
         </Link>
+        <Link to="/formateur/connexions" className="self-start text-sm text-vertFonce underline">
+          Applications connectées
+        </Link>
         {estAdmin && (
           <Link to="/admin" className="self-start text-sm text-vertFonce underline sm:ml-auto">
             Administration
