@@ -11,4 +11,5 @@ for f in ../migrations/*.sql; do
   sed -e '/pg_cron/d' -e '/cron.schedule/d' "$f" | psql -q -v ON_ERROR_STOP=1 -d "$BASE"
 done
 psql -v ON_ERROR_STOP=1 -d "$BASE" -f 10_scenario.sql
+psql -v ON_ERROR_STOP=1 -d "$BASE" -f 20_vue_participant.sql
 echo "✅ Tous les tests SQL sont passés."

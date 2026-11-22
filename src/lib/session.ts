@@ -160,7 +160,7 @@ export function useEtatSession(sessionId: string | undefined, options: Options =
       const debut = Date.now()
       try {
         const [donnees, liste] = await Promise.all([
-          appelerRpc<EtatSession>('etat_session', { p_session: sessionId }),
+          appelerRpc<EtatSession>('etat_session', { p_session: sessionId, p_vue: presentateur ? 'auto' : 'participant' }),
           presentateur ? lireParticipants(sessionId!) : Promise.resolve(null),
         ])
         if (!actif || mien < dernierNumeroApplique) return
