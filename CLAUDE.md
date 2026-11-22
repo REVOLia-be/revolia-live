@@ -63,3 +63,9 @@ JF (formateur, propriétaire du produit). Il n'est pas développeur : explique l
 
 La documentation de référence vit dans Notion, base « REVOLia — Documentation interne », propriété **Application = REVOLia Live** (fiche application, guide formateur, générateur, check-list, comptes et services, décisions, maintenance, journal des changements).
 **Toute évolution du produit met aussi à jour la page Notion concernée et ajoute une ligne au « Journal des changements ».** Jamais de clé ni de mot de passe dans Notion : on indique seulement où se trouve le réglage.
+
+## Connecteur MCP (Claude / ChatGPT)
+
+- Adresse publique : `https://quiz.revolia.be/mcp` (relais Cloudflare Pages `functions/_middleware.js`, routes limitées par `public/_routes.json`) → fonction Edge `supabase/functions/mcp` (déployée avec `verify_jwt = false`, l'authentification OAuth est faite dans le code).
+- Connexion : serveur OAuth 2.1 de Supabase Auth (Authorization Path `/oauth/consent`, page `src/pages/ConsentementOAuth.tsx`) ; retrait des accès : `src/pages/Connexions.tsx`.
+- Règles : toujours le jeton de l'utilisateur (RLS), jamais de clé service_role ; formateur actif exigé ; aucun pseudo ne sort ; aucun outil ne supprime un quiz ni ne lance une session.
