@@ -222,8 +222,6 @@ export function validerQuestion(q: QuestionEdition): ErreursQuestion {
       const valides = new Set(q.bonnes.filter((b) => Number.isInteger(b) && b >= 0 && b < q.choix.length))
       if (valides.size < 2) {
         e.bonne = 'Coche au moins 2 bonnes réponses. Pour une seule bonne réponse, passe la question en « une bonne réponse ».'
-      } else if (valides.size >= q.choix.length) {
-        e.bonne = 'Toutes les propositions sont cochées : laisse au moins une mauvaise proposition.'
       }
     }
   }
