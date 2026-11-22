@@ -20,18 +20,13 @@
   }
 }
 
-/* Animations de l'écran présentateur (nuage de mots, cartes, confettis). */
+/* Animations de l'écran présentateur (nuage de mots, cartes). */
 @keyframes apparition {
   from { opacity: 0; transform: scale(0.6); }
   to { opacity: 1; transform: scale(1); }
 }
-@keyframes chute-confetti {
-  from { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
-  to { transform: translateY(110vh) rotate(720deg); opacity: 0.9; }
-}
 @layer utilities {
   .animation-apparition { animation: apparition 0.6s ease-out both; }
-  .animation-confetti { animation: chute-confetti linear forwards; }
 }
 
 /* Trois gestes brefs, joués une seule fois : coche qui se trace, halo sur la bonne réponse, éclats de fin. */
@@ -54,11 +49,119 @@
 
 /* « Moins d'animations » demandé par l'ordinateur : plus de confettis ni de rebonds. */
 @media (prefers-reduced-motion: reduce) {
-  .animation-confetti { display: none; }
   .animation-apparition { animation: none; }
   .animate-bounce, .animate-pulse { animation: none; }
   /* On voit directement l'état final : coche entière, pas de halo, pas d'éclats. */
   .coche-tracee { animation: none; stroke-dashoffset: 0; }
   .halo-bonne-reponse { animation: none; }
   .eclat { display: none; }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Célébrations de l'écran projeté (moment du formateur, finale du bilan) et du téléphone.
+   Tout est joué une seule fois ; les couches décoratives ne captent jamais la souris.
+   Couleurs : uniquement les variables de theme.css (vert clair seulement sur fond foncé).
+   --------------------------------------------------------------------------------------------- */
+@keyframes celeb-mot {
+  0% { transform: translateY(118%) rotate(3deg); opacity: 0; }
+  14% { opacity: 1; }
+  62% { transform: translateY(-7%) rotate(0deg); }
+  82% { transform: translateY(2%); }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes celeb-trait {
+  0% { transform: scaleX(0); opacity: 0; }
+  12% { opacity: 1; }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+@keyframes celeb-etoile {
+  0% { transform: scale(0.1) rotate(-120deg); opacity: 0; }
+  55% { transform: scale(1.18) rotate(8deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes celeb-anneau {
+  0% { transform: translate(-50%, -50%) scale(0.03); opacity: 0; }
+  7% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.3); opacity: 0; }
+}
+@keyframes celeb-lueur {
+  0% { transform: translate(-50%, -50%) scale(0.05); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+@keyframes celeb-voile {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  100% { opacity: 1; }
+}
+@keyframes celeb-sortie {
+  to { opacity: 0; transform: translateY(-3vh) scale(1.04); filter: blur(10px); }
+}
+@keyframes celeb-banniere {
+  from { opacity: 0; transform: translateY(-2vh) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes celeb-fondu {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes celeb-onde {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes celeb-entree-tel {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.celeb-masque { display: inline-block; overflow: hidden; vertical-align: top; padding: 0.14em 0.05em 0.22em; margin: -0.14em -0.05em -0.22em; }
+.celeb-mot { display: inline-block; animation: celeb-mot 1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.celeb-trait {
+  transform-origin: center;
+  background: linear-gradient(90deg, transparent, var(--couleur-vert-clair) 22%, var(--couleur-blanc) 50%, var(--couleur-vert-clair) 78%, transparent);
+  box-shadow: 0 0 1.6vh color-mix(in srgb, var(--couleur-vert-clair) 70%, transparent);
+  animation: celeb-trait 0.95s cubic-bezier(0.6, 0, 0.2, 1) both;
+}
+.celeb-etoile { color: var(--couleur-vert-clair); filter: drop-shadow(0 0 1.6vh color-mix(in srgb, var(--couleur-vert-clair) 80%, transparent)); animation: celeb-etoile 0.95s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.celeb-anneau {
+  position: fixed; width: 100vmax; height: 100vmax; border-radius: 9999px; opacity: 0;
+  background: radial-gradient(circle closest-side, transparent 0, transparent 72%,
+    color-mix(in srgb, var(--couleur-vert-clair) 16%, transparent) 90%,
+    color-mix(in srgb, var(--couleur-blanc) 60%, transparent) 97%, transparent 100%);
+  animation: celeb-anneau 1.5s cubic-bezier(0.15, 0.7, 0.25, 1) both;
+}
+.celeb-lueur {
+  position: fixed; width: 70vmin; height: 70vmin; border-radius: 9999px; opacity: 0;
+  background: radial-gradient(circle closest-side, color-mix(in srgb, var(--couleur-blanc) 55%, transparent), color-mix(in srgb, var(--couleur-vert-clair) 35%, transparent) 38%, transparent 100%);
+  animation: celeb-lueur 1.3s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.celeb-voile {
+  background: radial-gradient(ellipse at center, transparent 18%, color-mix(in srgb, var(--couleur-bleu-violet) 82%, transparent) 100%);
+  animation: celeb-voile 0.7s ease-out both;
+}
+.celeb-texte { color: var(--couleur-blanc); /* lueur par filtre : une ombre de texte serait coupée par le masque des mots */ filter: drop-shadow(0 0 0.28em color-mix(in srgb, var(--couleur-vert-clair) 45%, transparent)); }
+
+/* État stable : le message reste en bandeau élégant au-dessus des résultats. */
+.celeb-banniere {
+  position: relative; overflow: hidden;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--couleur-vert) 42%, transparent), color-mix(in srgb, var(--couleur-blanc) 6%, transparent) 85%);
+  border: 1px solid color-mix(in srgb, var(--couleur-vert-clair) 55%, transparent);
+}
+.celeb-banniere::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; transform-origin: left;
+  background: linear-gradient(90deg, var(--couleur-vert-clair), color-mix(in srgb, var(--couleur-vert-clair) 0%, transparent));
+}
+.celeb-banniere-anime { animation: celeb-banniere 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) var(--celeb-delai, 3s) both; }
+.celeb-banniere-anime::after { animation: celeb-trait 1s cubic-bezier(0.6, 0, 0.2, 1) calc(var(--celeb-delai, 3s) + 0.25s) both; }
+
+/* Téléphone : entrée douce, coche qui se trace, une onde. */
+.celeb-tel { animation: celeb-entree-tel 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.celeb-onde { animation: celeb-onde 1s ease-out 0.35s 1 both; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Version statique : fondu simple du message, pas de particules, pas d'onde. */
+  .celeb-banniere-anime { animation: celeb-fondu 0.8s ease both; }
+  .celeb-banniere-anime::after { animation: none; }
+  .celeb-tel { animation: celeb-fondu 0.6s ease both; }
+  .celeb-onde { display: none; }
 }

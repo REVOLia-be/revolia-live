@@ -325,13 +325,15 @@ function libelleReponse(question: NonNullable<EtatSession['question']>, valeur: 
   return `« ${valeur} »`
 }
 
-// Moment de célébration choisi par le formateur : petit encart festif (le halo se coupe en mode « moins d'animations »).
+// Moment de célébration choisi par le formateur : encart qui entre en douceur, coche qui se trace et une onde légère
+// (une seule fois ; en mode « moins d'animations », simple fondu).
 function EncartCelebration({ texte }: { texte: string }) {
   return (
-    <p role="status" className="halo-bonne-reponse flex items-center gap-3 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-bold leading-snug text-vert [overflow-wrap:anywhere]">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="shrink-0">
-        <path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2 6.3 20.3l1.2-6.4L2.8 9.5l6.4-.8z" />
-      </svg>
+    <p role="status" className="celeb-tel flex items-center gap-3 rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-bold leading-snug text-vert [overflow-wrap:anywhere]">
+      <span aria-hidden className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-pilule bg-vert text-blanc">
+        <span className="celeb-onde absolute inset-0 rounded-pilule border-2 border-vert" />
+        <Coche taille={22} trace />
+      </span>
       <span className="min-w-0">{texte}</span>
     </p>
   )

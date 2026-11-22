@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { exporterSession } from '../../lib/exporter'
 import { messageErreur } from '../../lib/erreurs'
 import Bouton from '../Bouton'
 import JaugeCollective from '../JaugeCollective'
-import Confettis from './Confettis'
+import FinaleBilan from './FinaleBilan'
+import { dejaJoue, marquerJoue, mouvementReduit } from './elementsCelebration'
 import ZonesEcran from './ZonesEcran'
 import NuageDeMots from './NuageDeMots'
 import type { Bilan, EtatSession, NomMention } from '../../lib/session'
@@ -42,6 +43,19 @@ export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props)
   const derniere = sections.length - 1
   // Si le formateur recharge la page sur un quiz terminé, on montre directement la fin.
   const [indice, setIndice] = useState(etat.etat === 'terminee' ? derniere : 0)
+
+  // Finale : jouée une seule fois, à l'arrivée sur la dernière section. Pas de rejeu si on revient en arrière,
+  // ni si la page est rechargée sur un quiz déjà terminé (état calme).
+  const refBilan = useRef<HTMLDivElement>(null)
+  const cleFinale = `finale:${etat.session_id}`
+  const [dejaTermine] = useState(() => etat.etat === 'terminee')
+  const [finaleLancee, setFinaleLancee] = useState(false)
+  const fini0 = bilan ? indice >= derniere : false
+  useEffect(() => {
+    if (!fini0 || finaleLancee || dejaTermine || mouvementReduit() || dejaJoue(cleFinale)) return
+    marquerJoue(cleFinale)
+    setFinaleLancee(true)
+  }, [fini0, finaleLancee, dejaTermine, cleFinale])
 
   // Pas de défilement automatique : le formateur commente à son rythme (Précédent / Suite).
   const [exportEnCours, setExportEnCours] = useState(false)
@@ -101,7 +115,8 @@ export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props)
 
   return (
     <ZonesEcran erreur={erreur ?? erreurExport} pied={pied}>
-      {fini && <Confettis />}
+      {finaleLancee && <FinaleBilan jauge={bilan.jauge} cibleRef={refBilan} />}
+      <div ref={refBilan} className="flex min-h-0 flex-1 flex-col gap-[2vh]">
       <h1 className="shrink-0 text-[1.2em] leading-tight">{etat.etat === 'terminee' ? 'Quiz terminé. Merci à tous !' : 'Bilan de la salle'}</h1>
 
       <div key={section} className="animation-apparition min-h-0 flex-1 overflow-hidden">
@@ -115,6 +130,7 @@ export default function EcranBilan({ etat, enCours, erreur, onTerminer }: Props)
         )}
         {section === 'coeurs' && <SectionCoeurs bilan={bilan} />}
         {section === 'mentions' && <SectionMentions bilan={bilan} />}
+      </div>
       </div>
     </ZonesEcran>
   )

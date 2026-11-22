@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Bouton from '../Bouton'
 import { Ampoule, Coche } from '../Pictos'
+import { Etincelle } from './elementsCelebration'
 import ZonesEcran from './ZonesEcran'
 import ContenuAjuste from './ContenuAjuste'
 import ResultatsLibres from './ResultatsLibres'
+import MomentCelebration, { DELAI_BANDEAU_MS } from './MomentCelebration'
+import { dejaJoue, marquerJoue, mouvementReduit } from './elementsCelebration'
 import { lettre, type EtatSession } from '../../lib/session'
 
 interface Props {
@@ -15,20 +18,18 @@ interface Props {
   onAction: (fonction: 'basculer_coup_de_coeur' | 'masquer_reponse', idReponse: string) => void
 }
 
-// À côté des résultats (niveau 0) ou en dessous, en pleine largeur (niveau 1 et plus).
-// Moment de célébration choisi par le formateur : encart sobre, halo bref (coupé si « moins d'animations »).
-function EncartCelebration({ texte }: { texte: string }) {
+// Moment de célébration choisi par le formateur. Une fois la mise en scène jouée (voir MomentCelebration),
+// le message reste en bandeau élégant au-dessus des résultats. Le bandeau occupe sa place dès le début :
+// la mise en page ne bouge pas quand il apparaît.
+function BandeauCelebration({ texte, anime }: { texte: string; anime: boolean }) {
   return (
     <p
       role="status"
-      className="halo-bonne-reponse flex shrink-0 items-center gap-[1vw] rounded-carte border-4 border-vertClair bg-blanc px-[1.5vw] py-[1vh] text-bleuViolet"
+      className={`celeb-banniere ${anime ? 'celeb-banniere-anime' : ''} flex shrink-0 items-center gap-[1.2vw] rounded-carte px-[1.6vw] py-[1.1vh] text-blanc`}
+      style={{ ['--celeb-delai' as string]: `${mouvementReduit() ? 0 : DELAI_BANDEAU_MS}ms` }}
     >
-      <span aria-hidden className="shrink-0 text-vert">
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-[1.2em] w-[1.2em]">
-          <path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2 6.3 20.3l1.2-6.4L2.8 9.5l6.4-.8z" />
-        </svg>
-      </span>
-      <span data-texte-principal className="min-w-0 text-[0.7em] font-bold leading-tight [overflow-wrap:anywhere]">{texte}</span>
+      <Etincelle className="h-[1.1em] w-[1.1em] shrink-0 text-vertClair" />
+      <span data-texte-principal className="min-w-0 font-titre text-[0.78em] leading-tight [overflow-wrap:anywhere]">{texte}</span>
     </p>
   )
 }
@@ -59,6 +60,15 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
     return () => window.clearTimeout(minuteur)
   }, [])
 
+  // La mise en scène se joue une seule fois par question (clé : id de la question), jamais à cause d'un simple rechargement de l'état.
+  const refResultats = useRef<HTMLDivElement>(null)
+  const cleCelebration = `${etat.session_id}:${question.id}`
+  const [jouer] = useState(() => !mouvementReduit() && !dejaJoue(cleCelebration))
+  const celebre = Boolean(etat.celebration)
+  useEffect(() => {
+    if (celebre) marquerJoue(cleCelebration)
+  }, [celebre, cleCelebration])
+
   const explication = resultats?.explication?.trim() ?? ''
   const repartition = resultats?.repartition ?? []
   const total = resultats?.nb_reponses ?? 0
@@ -79,6 +89,8 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
 
   return (
     <ZonesEcran code={etat.code} erreur={erreur} pied={bouton}>
+      {celebre && jouer && <MomentCelebration texte={etat.celebration!} cibleRef={refResultats} />}
+      <div ref={refResultats} className="flex min-h-0 flex-1 flex-col">
       <ContenuAjuste cle={`resultats-${question.id}`} niveaux={3} plancherEm={0.6}>
         {(niveau) => {
           // Niveau 0 : « Pourquoi ? » à droite des résultats. Niveau 1 : sous les résultats, en pleine largeur.
@@ -98,7 +110,7 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
                 <h1 data-texte-principal className="text-[0.95em] leading-tight [overflow-wrap:anywhere]">{question.enonce}</h1>
               </div>
 
-              {etat.celebration && <EncartCelebration texte={etat.celebration} />}
+              {etat.celebration && <BandeauCelebration texte={etat.celebration} anime={jouer} />}
 
               {(question.type === 'qcm' || question.type === 'qcm_multiple') && resultats ? (
                 <>
@@ -163,6 +175,7 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
           )
         }}
       </ContenuAjuste>
+      </div>
     </ZonesEcran>
   )
 }
