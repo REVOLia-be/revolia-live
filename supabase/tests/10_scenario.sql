@@ -43,6 +43,20 @@ insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse
   ('10000000-0000-0000-0000-000000000001', 6, 'qcm',     'Q6', '{A,B}',   1, 30),
   ('10000000-0000-0000-0000-000000000001', 7, 'qcm',     'Q7', '{A,B}',   1, 30);
 update public.questions set explication = 'Parce que B.' where ordre = 1;
+-- QCM à plusieurs bonnes réponses : Q8 avec annonce du nombre, Q9 sans
+insert into public.questions (quiz_id, ordre, type, enonce, choix, bonnes_reponses, annoncer_nombre, duree_secondes) values
+  ('10000000-0000-0000-0000-000000000001', 8, 'qcm_multiple', 'Q8', '{A,B,C,D}', '{0,2}',   true,  30),
+  ('10000000-0000-0000-0000-000000000001', 9, 'qcm_multiple', 'Q9', '{A,B,C,D}', '{1,2,3}', false, 30);
+select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, choix, bonnes_reponses)
+  values ('10000000-0000-0000-0000-000000000001', 10, 'qcm_multiple', 'X', '{A,B,C}', '{1}')$$, 'qcm_coherent');
+select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, choix, bonnes_reponses)
+  values ('10000000-0000-0000-0000-000000000001', 10, 'qcm_multiple', 'X', '{A,B,C}', '{0,3}')$$, 'qcm_coherent');
+select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, choix, bonnes_reponses)
+  values ('10000000-0000-0000-0000-000000000001', 10, 'qcm_multiple', 'X', '{A,B,C}', '{1,1}')$$, 'qcm_coherent');
+select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse, bonnes_reponses)
+  values ('10000000-0000-0000-0000-000000000001', 10, 'qcm_multiple', 'X', '{A,B,C}', 0, '{1,2}')$$, 'qcm_coherent');
+select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, bonnes_reponses)
+  values ('10000000-0000-0000-0000-000000000001', 10, 'nuage', 'X', '{1,2}')$$, 'qcm_coherent');
 update public.quiz set celebrations = '[{"apres_question": 1, "message": "Premier pas, bravo la salle !"}]';
 select test.doit_echouer($$update public.quiz set celebrations = '[{"apres_question": 1, "message": "a"}, {"apres_question": 1, "message": "b"}]'$$, 'quiz_celebrations_valides');
 select test.doit_echouer($$update public.quiz set celebrations = '[{"apres_question": 0, "message": "a"}]'$$, 'quiz_celebrations_valides');
@@ -51,7 +65,10 @@ select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, e
 select set_config('test.session', (public.lancer_session('10000000-0000-0000-0000-000000000001', true, '{Table 1,Table 2}')->>'session_id'), false);
 select set_config('test.code', (select code from public.sessions where id = current_setting('test.session')::uuid), false);
 select set_config('test.table1', (select id::text from public.tables_salle where ordre = 1), false);
-select test.verifier((select count(*) from public.questions_session) = 7, 'questions copiées à la session');
+select test.verifier((select count(*) from public.questions_session) = 9, 'questions copiées à la session');
+select test.verifier((select count(*) from public.questions_session where type = 'qcm_multiple' and bonnes_reponses is not null) = 2
+  and (select annoncer_nombre from public.questions_session where ordre = 8) and not (select annoncer_nombre from public.questions_session where ordre = 9),
+  'bonnes_reponses et annoncer_nombre copiés à la session');
 select test.verifier(jsonb_array_length((select celebrations from public.sessions)) = 1, 'célébrations du quiz copiées dans la session');
 reset role;
 
@@ -151,6 +168,53 @@ select test.jouer('"Super journée"', '"Très utile"'); -- Q4 ouverte
 select test.jouer('4', '5');            -- Q5 échelle
 select test.jouer('1', '1');            -- Q6 qcm
 select test.jouer(null, '1');           -- Q7 qcm : A ne répond pas
+
+-- ===== Q8 : QCM multiple AVEC annonce (bonnes : A et C) =====
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000f', false);
+select public.ouvrir_question(current_setting('test.session')::uuid);
+select set_config('test.q8', (select question_courante_id::text from public.sessions), false);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select test.verifier((public.etat_session(current_setting('test.session')::uuid)->'question'->>'nb_bonnes')::int = 2, 'Q8 : nb_bonnes annoncé');
+select test.verifier(not (public.etat_session(current_setting('test.session')::uuid)::text like '%bonnes_reponses%'), 'Q8 : etat_session ne contient pas les indices');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '[1]'), 'exactement 2');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '[0,1,2]'), 'exactement 2');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '[1,1]'), 'une seule fois');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '[0,4]'), 'invalide');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '[0,-1]'), 'invalide');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '[0,"1"]'), 'invalide');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '2'), 'invalide');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q8'), '[]'), 'au moins');
+select public.repondre(current_setting('test.q8')::uuid, '[2,0]');
+select test.verifier((select valeur from public.reponses where question_id = current_setting('test.q8')::uuid) = '[0,2]', 'Q8 : réponse stockée triée');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select public.repondre(current_setting('test.q8')::uuid, '[0,2]');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000f', false);
+select public.fermer_question(current_setting('test.session')::uuid);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select test.verifier(public.resultats_question(current_setting('test.q8')::uuid)->'bonnes_reponses' = '[0,2]' and public.resultats_question(current_setting('test.q8')::uuid)->'repartition' = '[2,0,2,0]' and (public.resultats_question(current_setting('test.q8')::uuid)->>'taux_reussite')::int = 100 and (public.resultats_question(current_setting('test.q8')::uuid)->>'nb_reponses')::int = 2, 'Q8 : résultats (bonnes, répartition, taux)');
+select test.verifier((public.resultats_question(current_setting('test.q8')::uuid)->>'est_correcte')::boolean and not (public.resultats_question(current_setting('test.q8')::uuid)->>'presque')::boolean and (public.resultats_question(current_setting('test.q8')::uuid)->>'ma_contribution')::int = 2 and public.resultats_question(current_setting('test.q8')::uuid)->'ma_reponse' = '[0,2]', 'Q8 : réponse exacte = juste, contribution 2');
+
+-- ===== Q9 : QCM multiple SANS annonce (bonnes : B, C et D) =====
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000f', false);
+select public.ouvrir_question(current_setting('test.session')::uuid);
+select set_config('test.q9', (select question_courante_id::text from public.sessions), false);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select test.verifier(jsonb_typeof(public.etat_session(current_setting('test.session')::uuid)->'question'->'nb_bonnes') = 'null', 'Q9 : nb_bonnes absent si non annoncé');
+select test.verifier(not (public.etat_session(current_setting('test.session')::uuid)::text like '%bonnes_reponses%'), 'Q9 : etat_session ne contient pas les indices');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q9'), '[]'), 'au moins');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q9'), '[2,2]'), 'une seule fois');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q9'), '[0,4]'), 'invalide');
+select test.doit_echouer(format('select public.repondre(%L, %L)', current_setting('test.q9'), '[0,1,2,3,3]'), 'invalide');
+select public.repondre(current_setting('test.q9')::uuid, '[3]');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select public.repondre(current_setting('test.q9')::uuid, '[1,0]');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000f', false);
+select public.fermer_question(current_setting('test.session')::uuid);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select test.verifier(public.resultats_question(current_setting('test.q9')::uuid)->'bonnes_reponses' = '[1,2,3]' and public.resultats_question(current_setting('test.q9')::uuid)->'repartition' = '[1,1,0,1]' and (public.resultats_question(current_setting('test.q9')::uuid)->>'taux_reussite')::int = 0, 'Q9 : répartition et taux');
+select test.verifier(not (public.resultats_question(current_setting('test.q9')::uuid)->>'est_correcte')::boolean and (public.resultats_question(current_setting('test.q9')::uuid)->>'presque')::boolean and (public.resultats_question(current_setting('test.q9')::uuid)->>'ma_contribution')::int = 1, 'Q9 : partiel sans erreur = presque, contribution 1');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select test.verifier(not (public.resultats_question(current_setting('test.q9')::uuid)->>'est_correcte')::boolean and not (public.resultats_question(current_setting('test.q9')::uuid)->>'presque')::boolean and (public.resultats_question(current_setting('test.q9')::uuid)->>'ma_contribution')::int = 1, 'Q9 : partiel avec une mauvaise = pas presque');
 reset role;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000f', false);
@@ -162,14 +226,28 @@ select test.doit_echouer(format('select public.ouvrir_question(%L)', current_set
 select public.passer_au_bilan(current_setting('test.session')::uuid);
 select test.verifier((select count(*) from public.mentions where type = 'a_repondu_a_tout') = 0, 'personne n''a tout répondu (B a raté Q1, A Q7)');
 select test.verifier((select p.pseudo from public.mentions m join public.participants p on p.id = m.participant_id where m.type = 'plus_belle_progression') = 'Bob', 'plus belle progression : Bob');
-select test.verifier((public.etat_session(current_setting('test.session')::uuid)->'bilan'->'jauge'->>'points')::int = 17, 'jauge : 12 réponses + 5 justes = 17');
-select test.verifier((select count(*) from public.export_session(current_setting('test.session')::uuid)) = 12, 'export : 12 lignes');
+select test.verifier((public.etat_session(current_setting('test.session')::uuid)->'bilan'->'jauge'->>'points')::int = 23, 'jauge : 16 réponses + 7 justes = 23');
+select test.verifier((select count(*) from public.export_session(current_setting('test.session')::uuid)) = 16, 'export : 16 lignes');
+select test.verifier((select reponse from public.export_session(current_setting('test.session')::uuid) where question_ordre = 8 and pseudo = 'Alice') = 'A ; C'
+  and (select reponse from public.export_session(current_setting('test.session')::uuid) where question_ordre = 9 and pseudo = 'Bob') = 'A ; B'
+  and (select reponse from public.export_session(current_setting('test.session')::uuid) where question_ordre = 9 and pseudo = 'Alice') = 'D', 'export : libellés cochés joints par « ; »');
+select test.verifier(not (public.etat_session(current_setting('test.session')::uuid) ? 'mon_score'), 'formateur : pas de mon_score');
+select test.verifier(not ((public.etat_session(current_setting('test.session')::uuid)->'bilan')::text like '%mon_score%'), 'formateur : pas de score individuel dans le bilan');
 reset role;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
 set role authenticated;
 select test.verifier(jsonb_array_length(public.etat_session(current_setting('test.session')::uuid)->'bilan'->'mentions') = 2, 'B voit le bilan (progression + coup de cœur)');
+select test.verifier(public.etat_session(current_setting('test.session')::uuid)->'mon_score'
+  = '{"questions_posees": 9, "reponses_donnees": 8, "qcm_poses": 6, "qcm_justes": 3, "qcm_presque": 0, "contribution": 11}'::jsonb, 'B voit SON score (et seulement le sien)');
 select test.doit_echouer(format('select * from public.export_session(%L)', current_setting('test.session')), 'n''animes pas');
+reset role;
+
+-- ===== Score personnel de A =====
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+set role authenticated;
+select test.verifier(public.etat_session(current_setting('test.session')::uuid)->'mon_score'
+  = '{"questions_posees": 9, "reponses_donnees": 8, "qcm_poses": 6, "qcm_justes": 4, "qcm_presque": 1, "contribution": 12}'::jsonb, 'A voit SON score');
 reset role;
 
 -- ===== Participant C, jamais inscrit =====
@@ -189,4 +267,4 @@ select test.verifier((select count(*) from auth.users) = 2, 'purge : comptes for
 
 -- ===== Journal d'utilisation (survit à la purge) =====
 select test.verifier((select count(*) from public.journal_usage where type = 'session') = 1, 'journal : session lancée enregistrée');
-select test.verifier((select nb_reponses from public.journal_usage where type = 'session') = 12, 'journal : réponses comptées au bilan');
+select test.verifier((select nb_reponses from public.journal_usage where type = 'session') = 16, 'journal : réponses comptées au bilan');
