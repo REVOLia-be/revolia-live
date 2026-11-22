@@ -25,6 +25,7 @@ import {
 } from '../composants/edition/modele'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
+import { dupliquerQuiz } from '../lib/quiz'
 import { supabase } from '../lib/supabase'
 
 const CHAMP =
@@ -63,12 +64,12 @@ export default function EditionQuiz() {
     )
   }
   if (!id) return <Navigate to="/formateur" replace />
-  return <Editeur quizId={id} />
+  return <Editeur quizId={id} moi={formateur.id} />
 }
 
 const instantane = (q: QuizEdition) => JSON.stringify(q)
 
-function Editeur({ quizId }: { quizId: string }) {
+function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
   const navigate = useNavigate()
   const [quiz, setQuiz] = useState<QuizEdition | null>(null)
   const [reference, setReference] = useState('') // état enregistré, pour détecter les modifications
@@ -80,6 +81,9 @@ function Editeur({ quizId }: { quizId: string }) {
   const [afficherErreurs, setAfficherErreurs] = useState(false)
   const [typeAjout, setTypeAjout] = useState<TypeQuestion>('qcm')
   const [confirmationSuppr, setConfirmationSuppr] = useState<string | null>(null)
+  const [auteur, setAuteur] = useState<{ id: string; email: string } | null>(null) // seulement si le quiz n'est pas à moi
+  const [copieEnCours, setCopieEnCours] = useState(false)
+  const [erreurCopie, setErreurCopie] = useState<string | null>(null)
   const [panneauIA, setPanneauIA] = useState(false) // panneau « Proposer des questions »
   const [ouvertes, setOuvertes] = useState<string[]>([]) // questions dépliées (les autres sont repliées sur leur titre)
 
@@ -87,7 +91,7 @@ function Editeur({ quizId }: { quizId: string }) {
     setChargement('en_cours')
     const { data: q, error } = await supabase
       .from('quiz')
-      .select('id, titre, description, celebrations')
+      .select('id, titre, description, celebrations, formateur_id')
       .eq('id', quizId)
       .maybeSingle()
     if (error) {
@@ -98,6 +102,13 @@ function Editeur({ quizId }: { quizId: string }) {
     if (!q) {
       setChargement('absent')
       return
+    }
+    if (q.formateur_id !== moi) {
+      // Quiz d'un autre (cas d'un admin) : on retrouve son auteur pour l'afficher.
+      const { data: f } = await supabase.from('formateurs').select('id, email').eq('id', q.formateur_id).maybeSingle()
+      setAuteur({ id: q.formateur_id, email: f?.email ?? 'un autre formateur' })
+    } else {
+      setAuteur(null)
     }
     const { data: lignes, error: erreurQ } = await supabase
       .from('questions')
@@ -119,7 +130,7 @@ function Editeur({ quizId }: { quizId: string }) {
     setQuiz(charge)
     setReference(instantane(charge))
     setChargement('ok')
-  }, [quizId])
+  }, [quizId, moi])
 
   useEffect(() => {
     void charger()
@@ -249,6 +260,18 @@ function Editeur({ quizId }: { quizId: string }) {
     }
   }
 
+  async function dupliquerChezMoi() {
+    setCopieEnCours(true)
+    setErreurCopie(null)
+    try {
+      const nouveauId = await dupliquerQuiz(quizId, moi)
+      navigate(`/formateur/quiz/${nouveauId}`)
+    } catch (e) {
+      setErreurCopie(messageErreur(e))
+      setCopieEnCours(false)
+    }
+  }
+
   function retour(e: React.MouseEvent) {
     if (modifie && !window.confirm('Tu as des modifications non enregistrées. Quitter quand même ?')) {
       e.preventDefault()
@@ -264,10 +287,15 @@ function Editeur({ quizId }: { quizId: string }) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 pb-32 pt-10">
       <LogoMarque variante="vif" className="h-6 self-start" />
-      <Link to="/formateur" onClick={retour} className="text-lg font-semibold text-vert underline">
-        ← Mes quiz
+      <Link to={auteur ? '/admin' : '/formateur'} onClick={retour} className="text-lg font-semibold text-vert underline">
+        {auteur ? '← Administration' : '← Mes quiz'}
       </Link>
       <h1 className="text-4xl">Modifier le quiz</h1>
+      {auteur && (
+        <p className="text-lg font-semibold">
+          Quiz de {auteur.email}. Tu le modifies en tant qu'administrateur.
+        </p>
+      )}
 
       <Carte className="flex flex-col gap-4">
         <div>
@@ -419,10 +447,28 @@ function Editeur({ quizId }: { quizId: string }) {
         </Bouton>
       </Carte>
 
-      <Carte>
-        <h2 className="mb-3 text-2xl">Lancer ce quiz en direct</h2>
-        <PanneauLancement quizId={quizId} libelle="Lancer ce quiz" desactive={!peutLancer} raisonDesactive={raison} />
-      </Carte>
+      {auteur ? (
+        <Carte className="flex flex-col gap-3">
+          <h2 className="text-2xl">Animer ce quiz</h2>
+          <p className="text-base">
+            Ce quiz appartient à {auteur.email} : tu ne peux pas le lancer directement. Duplique-le dans tes quiz, puis lance ta copie.
+          </p>
+          {erreurCopie && (
+            <p role="alert" className="text-base font-semibold">
+              {erreurCopie}
+            </p>
+          )}
+          <Bouton type="button" onClick={dupliquerChezMoi} disabled={copieEnCours || modifie}>
+            {copieEnCours ? 'Copie en cours…' : 'Dupliquer dans mes quiz'}
+          </Bouton>
+          {modifie && <p className="text-base">Enregistre tes modifications avant de dupliquer.</p>}
+        </Carte>
+      ) : (
+        <Carte>
+          <h2 className="mb-3 text-2xl">Lancer ce quiz en direct</h2>
+          <PanneauLancement quizId={quizId} libelle="Lancer ce quiz" desactive={!peutLancer} raisonDesactive={raison} />
+        </Carte>
+      )}
 
       {/* Barre d'enregistrement toujours visible */}
       <div className="fixed inset-x-0 bottom-0 border-t border-vertClair/60 bg-blanc px-4 py-3 shadow-lg">

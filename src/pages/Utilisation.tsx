@@ -8,8 +8,9 @@ import { messageErreur } from '../lib/erreurs'
 import { supabase } from '../lib/supabase'
 
 // Journal d'utilisation : une ligne par session lancée, une ligne par génération de questions.
-interface LigneJournal {
+export interface LigneJournal {
   id: string
+  formateur_id?: string
   type: 'session' | 'generation'
   quiz_titre: string | null
   nb_participants: number | null
@@ -83,6 +84,27 @@ function regrouperParMois(lignes: LigneJournal[]): TotauxMois[] {
   return [...mois.values()]
 }
 
+function regrouperParFormateur(lignes: LigneJournal[], auteurs: Map<string, string>): TotauxMois[] {
+  const par = new Map<string, TotauxMois>()
+  for (const l of lignes) {
+    const cle = l.formateur_id ?? '?'
+    let m = par.get(cle)
+    if (!m) {
+      m = { cle, libelle: auteurs.get(cle) ?? 'Formateur inconnu', sessions: 0, participants: 0, reponses: 0, generations: 0, cout: 0 }
+      par.set(cle, m)
+    }
+    if (l.type === 'session') {
+      m.sessions += 1
+      m.participants += l.nb_participants ?? 0
+      m.reponses += l.nb_reponses ?? 0
+    } else {
+      m.generations += 1
+      m.cout += coutEuros(l)
+    }
+  }
+  return [...par.values()].sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'))
+}
+
 export default function Utilisation() {
   const formateur = useFormateur()
 
@@ -118,10 +140,10 @@ export default function Utilisation() {
       </MiseEnPageParticipant>
     )
   }
-  return <JournalUtilisation />
+  return <JournalUtilisation formateurId={formateur.id} />
 }
 
-function JournalUtilisation() {
+function JournalUtilisation({ formateurId }: { formateurId: string }) {
   const [lignes, setLignes] = useState<LigneJournal[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -131,6 +153,7 @@ function JournalUtilisation() {
       const { data, error } = await supabase
         .from('journal_usage')
         .select('*')
+        .eq('formateur_id', formateurId) // un admin lit tout le journal : ici, seulement le sien
         .order('cree_le', { ascending: false })
       if (!actif) return
       if (error) setErreur(messageErreur(error))
@@ -139,12 +162,7 @@ function JournalUtilisation() {
     return () => {
       actif = false
     }
-  }, [])
-
-  const sessions = lignes?.filter((l) => l.type === 'session') ?? []
-  const generations = lignes?.filter((l) => l.type === 'generation') ?? []
-  const totalParticipants = sessions.reduce((somme, l) => somme + (l.nb_participants ?? 0), 0)
-  const mois = lignes ? regrouperParMois(lignes) : []
+  }, [formateurId])
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-10">
@@ -162,14 +180,31 @@ function JournalUtilisation() {
 
       {lignes === null && !erreur && <p className="text-lg">Un instant…</p>}
 
-      {lignes?.length === 0 && (
-        <Carte>
-          <p className="text-lg">Rien à afficher pour l'instant. Les sessions lancées et les questions générées apparaîtront ici.</p>
-        </Carte>
-      )}
+      {lignes && <VueUtilisation lignes={lignes} />}
+    </main>
+  )
+}
 
-      {lignes && lignes.length > 0 && (
-        <>
+// Chiffres d'utilisation. Avec `auteurs` (id du formateur → email), la vue devient globale :
+// un tableau « Par formateur » est ajouté et chaque ligne du détail indique son formateur.
+export function VueUtilisation({ lignes, auteurs }: { lignes: LigneJournal[]; auteurs?: Map<string, string> }) {
+  const sessions = lignes.filter((l) => l.type === 'session')
+  const generations = lignes.filter((l) => l.type === 'generation')
+  const totalParticipants = sessions.reduce((somme, l) => somme + (l.nb_participants ?? 0), 0)
+  const mois = regrouperParMois(lignes)
+  const parFormateur = auteurs ? regrouperParFormateur(lignes, auteurs) : []
+  const nomFormateur = (l: LigneJournal) => (l.formateur_id && auteurs?.get(l.formateur_id)) || 'Formateur inconnu'
+
+  if (lignes.length === 0) {
+    return (
+      <Carte>
+        <p className="text-lg">Rien à afficher pour l'instant. Les sessions lancées et les questions générées apparaîtront ici.</p>
+      </Carte>
+    )
+  }
+
+  return (
+    <>
           <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Carte className="flex flex-col gap-1">
               <p className="text-base">Sessions animées</p>
@@ -184,6 +219,38 @@ function JournalUtilisation() {
               <p className="text-4xl font-bold text-vertFonce">{formatEntier.format(generations.length)}</p>
             </Carte>
           </section>
+
+          {auteurs && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-2xl">Par formateur</h2>
+              <Carte className="overflow-x-auto p-0">
+                <table className="w-full min-w-[640px] border-collapse text-left text-base">
+                  <thead>
+                    <tr className="border-b border-vertClair/60">
+                      <th className="px-4 py-3 font-semibold">Formateur</th>
+                      <th className="px-4 py-3 font-semibold">Sessions</th>
+                      <th className="px-4 py-3 font-semibold">Participants</th>
+                      <th className="px-4 py-3 font-semibold">Réponses</th>
+                      <th className="px-4 py-3 font-semibold">Générations</th>
+                      <th className="px-4 py-3 font-semibold">Coût estimé</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parFormateur.map((f) => (
+                      <tr key={f.cle} className="border-b border-vertClair/40 last:border-b-0">
+                        <td className="px-4 py-3 font-semibold">{f.libelle}</td>
+                        <td className="px-4 py-3">{formatEntier.format(f.sessions)}</td>
+                        <td className="px-4 py-3">{formatEntier.format(f.participants)}</td>
+                        <td className="px-4 py-3">{formatEntier.format(f.reponses)}</td>
+                        <td className="px-4 py-3">{formatEntier.format(f.generations)}</td>
+                        <td className="px-4 py-3">{texteEuros(f.cout)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Carte>
+            </section>
+          )}
 
           <section className="flex flex-col gap-3">
             <h2 className="text-2xl">Par mois</h2>
@@ -225,6 +292,7 @@ function JournalUtilisation() {
                 <p className="text-base font-semibold">
                   {dateHeure(l.cree_le)} · {l.type === 'session' ? 'Session' : 'Génération de questions'}
                 </p>
+                {auteurs && <p className="text-base">Formateur : {nomFormateur(l)}</p>}
                 <p className="text-base">{l.quiz_titre || '—'}</p>
                 {l.type === 'session' ? (
                   <p className="text-base">
@@ -236,8 +304,6 @@ function JournalUtilisation() {
               </Carte>
             ))}
           </section>
-        </>
-      )}
-    </main>
+    </>
   )
 }

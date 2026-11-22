@@ -7,6 +7,7 @@ import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import PanneauLancement from '../composants/edition/PanneauLancement'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
+import { dupliquerQuiz } from '../lib/quiz'
 import { supabase } from '../lib/supabase'
 
 interface LigneQuiz {
@@ -76,7 +77,7 @@ export default function MesQuiz() {
       </MiseEnPageParticipant>
     )
   }
-  return <ListeQuiz formateurId={formateur.id} />
+  return <ListeQuiz formateurId={formateur.id} estAdmin={formateur.est_admin} />
 }
 
 function BoutonDeconnexion() {
@@ -92,7 +93,7 @@ function BoutonDeconnexion() {
   )
 }
 
-function ListeQuiz({ formateurId }: { formateurId: string }) {
+function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: boolean }) {
   const [quiz, setQuiz] = useState<LigneQuiz[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [creation, setCreation] = useState(false)
@@ -102,6 +103,7 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
     const { data, error } = await supabase
       .from('quiz')
       .select('id, titre, description, questions(count)')
+      .eq('formateur_id', formateurId) // un admin voit tous les quiz : ici, seulement les siens
       .order('cree_le', { ascending: false })
     if (error) {
       setErreur(messageErreur(error))
@@ -116,7 +118,7 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
         nb_questions: q.questions?.[0]?.count ?? 0,
       })),
     )
-  }, [])
+  }, [formateurId])
 
   useEffect(() => {
     void charger()
@@ -182,6 +184,11 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
         <Link to="/formateur/utilisation" className="self-start text-base text-vert underline">
           Utilisation →
         </Link>
+        {estAdmin && (
+          <Link to="/admin" className="self-start text-sm text-vertFonce underline sm:ml-auto">
+            Administration
+          </Link>
+        )}
       </div>
       <h1 className="text-4xl">Mes quiz</h1>
 
@@ -197,7 +204,7 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
           <p className="text-lg">Tu n'as pas encore de quiz. Crée un nouveau quiz, ou le quiz de démonstration pour essayer.</p>
         </Carte>
       )}
-      {quiz?.map((q) => <CarteQuiz key={q.id} quiz={q} onChange={charger} onErreur={setErreur} />)}
+      {quiz?.map((q) => <CarteQuiz key={q.id} quiz={q} formateurId={formateurId} onChange={charger} onErreur={setErreur} />)}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Bouton type="button" onClick={creerNouveau} disabled={creation}>
@@ -214,10 +221,12 @@ function ListeQuiz({ formateurId }: { formateurId: string }) {
 
 function CarteQuiz({
   quiz,
+  formateurId,
   onChange,
   onErreur,
 }: {
   quiz: LigneQuiz
+  formateurId: string
   onChange: () => Promise<void>
   onErreur: (m: string | null) => void
 }) {
@@ -228,38 +237,10 @@ function CarteQuiz({
   async function dupliquer() {
     setOccupe(true)
     onErreur(null)
-    let nouveauId: string | null = null
     try {
-      const { data: original, error } = await supabase
-        .from('quiz')
-        .select('formateur_id, titre, description, celebrations')
-        .eq('id', quiz.id)
-        .single()
-      if (error) throw error
-      const suffixe = ' (copie)'
-      const titre = original.titre.slice(0, 120 - suffixe.length) + suffixe
-      const { data: copie, error: e2 } = await supabase
-        .from('quiz')
-        .insert({ formateur_id: original.formateur_id, titre, description: original.description, celebrations: original.celebrations })
-        .select('id')
-        .single()
-      if (e2) throw e2
-      nouveauId = copie.id
-      const { data: lignes, error: e3 } = await supabase
-        .from('questions')
-        .select('ordre, type, enonce, choix, bonne_reponse, bonnes_reponses, annoncer_nombre, libelle_min, libelle_max, duree_secondes, explication')
-        .eq('quiz_id', quiz.id)
-        .order('ordre')
-      if (e3) throw e3
-      if (lignes && lignes.length > 0) {
-        const { error: e4 } = await supabase
-          .from('questions')
-          .insert(lignes.map((l: Record<string, unknown>) => ({ ...l, quiz_id: copie.id })))
-        if (e4) throw e4
-      }
+      await dupliquerQuiz(quiz.id, formateurId)
       await onChange()
     } catch (e) {
-      if (nouveauId) await supabase.from('quiz').delete().eq('id', nouveauId) // pas de copie à moitié faite
       onErreur(messageErreur(e))
     } finally {
       setOccupe(false)

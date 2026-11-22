@@ -29,7 +29,7 @@ export type StatutFormateur =
   | { statut: 'deconnecte' }
   | { statut: 'non_autorise' }
   | { statut: 'erreur'; erreur: unknown }
-  | { statut: 'ok'; id: string; email: string }
+  | { statut: 'ok'; id: string; email: string; est_admin: boolean }
 
 export function useFormateur(): StatutFormateur {
   const [etat, setEtat] = useState<StatutFormateur>({ statut: 'chargement' })
@@ -44,11 +44,16 @@ export function useFormateur(): StatutFormateur {
           if (actif) setEtat({ statut: 'deconnecte' })
           return
         }
-        const { data: fiche, error } = await supabase.from('formateurs').select('id, email').maybeSingle()
+        // Un admin peut lire plusieurs fiches : on cible explicitement la sienne.
+        const { data: fiche, error } = await supabase
+          .from('formateurs')
+          .select('id, email, est_admin, actif')
+          .eq('id', utilisateur.id)
+          .maybeSingle()
         if (!actif) return
         if (error) setEtat({ statut: 'erreur', erreur: error })
-        else if (!fiche) setEtat({ statut: 'non_autorise' })
-        else setEtat({ statut: 'ok', id: fiche.id, email: fiche.email })
+        else if (!fiche || !fiche.actif) setEtat({ statut: 'non_autorise' })
+        else setEtat({ statut: 'ok', id: fiche.id, email: fiche.email, est_admin: !!fiche.est_admin })
       } catch (e) {
         if (actif) setEtat({ statut: 'erreur', erreur: e })
       }
