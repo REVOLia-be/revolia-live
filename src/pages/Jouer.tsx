@@ -11,6 +11,7 @@ import { codeErreur, messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
 import { lireSalle } from '../lib/memoire'
 import { usePrechargement } from '../lib/photos'
+import EcranAtelierParticipant from '../composants/atelier/EcranAtelierParticipant'
 import { GrilleChoixPhotos, PhotoQuestion, TuileResultat } from '../composants/PhotosParticipant'
 import { lettre, useEtatSession, type EtatSession, type MonScore, type NomMention } from '../lib/session'
 
@@ -83,10 +84,16 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
     )
   }
 
+  // Atelier en cours : écran à son rythme, plein écran (barre d'étapes, pied de page fixe), sans jauge ni compte à rebours.
+  const estAtelier = etat.question?.type === 'atelier' && (etat.etat === 'question' || etat.etat === 'resultats')
+  if (estAtelier && etat.etat === 'question') {
+    return <EcranAtelierParticipant key={etat.question!.id} etat={etat} recharger={recharger} connexionPerdue={connexionPerdue} />
+  }
+
   // Bandeau fixe : progression « Question N / total », chronomètre et jauge de la salle (toujours visibles).
   const enBilan = etat.etat === 'bilan' || etat.etat === 'terminee'
   const numero = enBilan ? etat.nb_questions : etat.question?.ordre
-  const haut = (
+  const haut = estAtelier ? undefined : (
     <>
       {numero !== undefined && etat.nb_questions > 0 && (
         <div className="mb-3">
@@ -168,6 +175,14 @@ function Ecran({
   }
 
   if (etat.etat === 'resultats' && etat.question) {
+    if (etat.question.type === 'atelier') {
+      return (
+        <>
+          <h1 className="text-3xl">L'atelier est terminé</h1>
+          <p className="text-lg">Regarde l'écran : on reprend ensemble.</p>
+        </>
+      )
+    }
     if (etat.question.type === 'qcm_multiple') return <EcranResultatsMultiple etat={etat} />
     return etat.question.type === 'qcm' ? <EcranResultats etat={etat} /> : <EcranResultatsLibre etat={etat} />
   }

@@ -8,6 +8,8 @@ import EcranAttente from '../composants/presentateur/EcranAttente'
 import EcranBilan from '../composants/presentateur/EcranBilan'
 import EcranQuestion from '../composants/presentateur/EcranQuestion'
 import EcranResultats from '../composants/presentateur/EcranResultats'
+import EcranAtelier from '../composants/presentateur/EcranAtelier'
+import EcranResultatsAtelier from '../composants/presentateur/EcranResultatsAtelier'
 import MenuModeration from '../composants/presentateur/MenuModeration'
 import { ConnexionPerdueContext } from '../composants/presentateur/ZonesEcran'
 import { appelerRpc } from '../lib/api'
@@ -76,7 +78,7 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
   // le serveur accepte encore 2 s de retard pour les réponses parties juste avant la fin
   // sur un wifi lent. Fermer pile à zéro les rejetterait.
   useEffect(() => {
-    if (!question || secondes !== 0) return
+    if (!question || question.type === 'atelier' || secondes !== 0) return
     const minuteur = window.setTimeout(() => void fermerQuestion(), 1500)
     return () => window.clearTimeout(minuteur)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -174,6 +176,12 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
         return
       }
       if (c.etat?.etat === 'question') {
+        // Atelier : pas de compte à rebours, jamais de fermeture sans geste volontaire (deux pressions).
+        if (c.etat.question?.type === 'atelier') {
+          if (!demander('terminer', "Appuie encore pour terminer l'atelier")) return
+          void c.fermerQuestion()
+          return
+        }
         if (c.secondes !== null && c.secondes > 0 && !demander('arreter', 'Appuie encore pour arrêter la question')) return
         void c.fermerQuestion()
         return
@@ -209,7 +217,7 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
   return (
     <ConnexionPerdueContext.Provider value={connexionPerdue}>
     <MiseEnPagePresentateur haut={haut} plein>
-      <MenuModeration participants={participants} onExclure={exclure} />
+      <MenuModeration participants={participants} onExclure={exclure} sessionId={sessionId} />
       {etat.etat === 'attente' && (
         <EcranAttente
           etat={etat}
@@ -220,10 +228,23 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
           onExclure={exclure}
         />
       )}
-      {etat.etat === 'question' && etat.question && (
+      {etat.etat === 'question' && etat.question?.type === 'atelier' && (
+        <EcranAtelier etat={etat} enCours={enCours} erreur={erreurAction} onTerminer={fermerQuestion} />
+      )}
+      {etat.etat === 'question' && etat.question && etat.question.type !== 'atelier' && (
         <EcranQuestion etat={etat} secondes={secondes} enCours={enCours} erreur={erreurAction} onArreter={fermerQuestion} />
       )}
-      {etat.etat === 'resultats' && etat.question && (
+      {etat.etat === 'resultats' && etat.question?.type === 'atelier' && (
+        <EcranResultatsAtelier
+          key={etat.question.id}
+          etat={etat}
+          enCours={enCours}
+          erreur={erreurAction}
+          onSuivante={() => piloter('ouvrir_question')}
+          onBilan={() => piloter('passer_au_bilan')}
+        />
+      )}
+      {etat.etat === 'resultats' && etat.question && etat.question.type !== 'atelier' && (
         <EcranResultats
           key={etat.question.id}
           etat={etat}

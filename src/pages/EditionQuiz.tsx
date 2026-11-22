@@ -5,13 +5,19 @@ import Carte from '../composants/Carte'
 import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import EditeurQuestion from '../composants/edition/EditeurQuestion'
+import EditeurAtelier from '../composants/edition/EditeurAtelier'
 import PanneauCelebrations from '../composants/edition/PanneauCelebrations'
 import PanneauLancement from '../composants/edition/PanneauLancement'
 import PanneauPropositions from '../composants/edition/PanneauPropositions'
 import {
+  COLONNES_ETAPES,
+  LIBELLE_ATELIER,
   LIMITES,
   TYPES,
   depuisLigne,
+  etapeDepuisLigne,
+  etapeVersLigne,
+  type LigneEtape,
   dupliquerQuestion,
   nouvelleQuestion,
   celebrationsDepuisBase,
@@ -75,6 +81,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
   const [quiz, setQuiz] = useState<QuizEdition | null>(null)
   const [reference, setReference] = useState('') // état enregistré, pour détecter les modifications
   const idsEnBase = useRef<Set<string>>(new Set())
+  const idsEtapesEnBase = useRef<Set<string>>(new Set())
   const [chargement, setChargement] = useState<'en_cours' | 'ok' | 'absent' | 'erreur'>('en_cours')
   const [erreurChargement, setErreurChargement] = useState<string | null>(null)
   const [erreurSauvegarde, setErreurSauvegarde] = useState<string | null>(null)
@@ -122,12 +129,30 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
       setChargement('erreur')
       return
     }
+    const lignesQ = (lignes ?? []) as LigneQuestion[]
+    // Étapes des ateliers : une seule requête, regroupées par atelier.
+    const idsAteliers = lignesQ.filter((l) => l.type === 'atelier').map((l) => l.id)
+    const parAtelier = new Map<string, LigneEtape[]>()
+    if (idsAteliers.length > 0) {
+      const { data: lignesE, error: erreurE } = await supabase
+        .from('etapes_atelier')
+        .select(COLONNES_ETAPES)
+        .in('question_id', idsAteliers)
+        .order('ordre')
+      if (erreurE) {
+        setErreurChargement(messageErreur(erreurE))
+        setChargement('erreur')
+        return
+      }
+      for (const e of (lignesE ?? []) as LigneEtape[]) parAtelier.set(e.question_id, [...(parAtelier.get(e.question_id) ?? []), e])
+    }
     const charge: QuizEdition = {
       titre: q.titre,
       description: q.description ?? '',
       celebrations: celebrationsDepuisBase(q.celebrations),
-      questions: ((lignes ?? []) as LigneQuestion[]).map(depuisLigne),
+      questions: lignesQ.map((l) => depuisLigne(l, (parAtelier.get(l.id) ?? []).map(etapeDepuisLigne))),
     }
+    idsEtapesEnBase.current = new Set([...parAtelier.values()].flat().map((e) => e.id))
     idsEnBase.current = new Set(charge.questions.map((x) => x.id))
     setQuiz(charge)
     setReference(instantane(charge))
@@ -257,6 +282,23 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
         aEnregistrer.questions.forEach((q) => idsEnBase.current.add(q.id))
       }
 
+      // Étapes des ateliers : les retirées d'abord (elles libèrent leur numéro d'ordre), puis toutes les autres en une requête.
+      const etapesGardees = new Set(aEnregistrer.questions.flatMap((q) => q.etapes.map((e) => e.id)))
+      const etapesRetirees = [...idsEtapesEnBase.current].filter((x) => !etapesGardees.has(x))
+      if (etapesRetirees.length > 0) {
+        const { error: e5 } = await supabase.from('etapes_atelier').delete().in('id', etapesRetirees)
+        if (e5) throw e5
+        etapesRetirees.forEach((x) => idsEtapesEnBase.current.delete(x))
+      }
+      const lignesEtapes = aEnregistrer.questions.flatMap((q) =>
+        q.type === 'atelier' ? q.etapes.map((e, k) => etapeVersLigne(e, q.id, k + 1)) : [],
+      )
+      if (lignesEtapes.length > 0) {
+        const { error: e6 } = await supabase.from('etapes_atelier').upsert(lignesEtapes, { onConflict: 'id' })
+        if (e6) throw e6
+        lignesEtapes.forEach((l) => idsEtapesEnBase.current.add(l.id))
+      }
+
       photosEnregistrees(aEnregistrer.questions.flatMap((q) => [q.image, ...(q.imagesChoix ?? [])]))
       setReference(instantane(aEnregistrer))
       setAfficherErreurs(false)
@@ -367,8 +409,9 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
       )}
 
       <h2 className="text-2xl">
-        Questions ({nb})
+        Déroulé de la session ({nb})
       </h2>
+      <p className="-mt-3 text-base">Les questions se jouent ensemble, les ateliers à son rythme. Un seul QR code pour toute la journée.</p>
       {nb === 0 && (
         <Carte>
           <p className="text-lg">Ce quiz n'a pas encore de question. Ajoutes-en une ci-dessous.</p>
@@ -377,11 +420,13 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
       {courant.questions.map((q, i) => {
         const aDesErreurs = afficherErreurs && Object.values(valid.questions[i] ?? {}).some(Boolean)
         const depliee = ouvertes.includes(q.id) || aDesErreurs
-        const libelleType = TYPES.find((t) => t.valeur === q.type)?.libelle ?? ''
+        const estAtelier = q.type === 'atelier'
+        const libelleType = estAtelier ? LIBELLE_ATELIER : TYPES.find((t) => t.valeur === q.type)?.libelle ?? ''
+        const EditeurElement = estAtelier ? EditeurAtelier : EditeurQuestion
         return (
           <div key={q.id} className="flex flex-col gap-2">
             {depliee ? (
-              <EditeurQuestion
+              <EditeurElement
                 numero={i + 1}
                 total={nb}
                 question={q}
@@ -401,9 +446,11 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
               <Carte className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-base">
-                    Question {i + 1} · {libelleType}
+                    {estAtelier ? `Atelier ${i + 1} · ${q.etapes.length} étape${q.etapes.length > 1 ? 's' : ''}` : `Question ${i + 1} · ${libelleType}`}
                   </p>
-                  <p className="truncate text-lg font-semibold">{q.enonce.trim() || (q.image ? 'Question en photo' : 'Question sans texte')}</p>
+                  <p className="truncate text-lg font-semibold">
+                    {q.enonce.trim() || (estAtelier ? 'Atelier sans titre' : q.image ? 'Question en photo' : 'Question sans texte')}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -417,7 +464,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
             )}
             {confirmationSuppr === q.id && (
               <Carte className="flex flex-col gap-3">
-                <p className="text-lg font-semibold">Supprimer la question {i + 1} ?</p>
+                <p className="text-lg font-semibold">Supprimer {estAtelier ? "l'atelier" : 'la question'} {i + 1} ?</p>
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Bouton type="button" onClick={() => supprimer(i)}>
                     Oui, supprimer
@@ -455,6 +502,16 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
           }}>
           + Ajouter cette question
         </Bouton>
+        <div className="border-t border-vertClair/60 pt-3">
+          <p className="mb-2 text-base">Un atelier laisse chacun avancer à son rythme, étape par étape (consigne, fichiers, prompts, rendu).</p>
+          <Bouton type="button" variante="secondaire" onClick={() => {
+              const nouvel = nouvelleQuestion('atelier')
+              changer({ questions: [...courant.questions, nouvel] })
+              setOuvertes((o) => [...o, nouvel.id])
+            }}>
+            + Ajouter un atelier
+          </Bouton>
+        </div>
       </Carte>
 
       {auteur ? (

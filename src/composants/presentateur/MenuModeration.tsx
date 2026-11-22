@@ -5,9 +5,12 @@ import type { ParticipantListe } from '../../lib/session'
 export default function MenuModeration({
   participants,
   onExclure,
+  sessionId,
 }: {
   participants: ParticipantListe[]
   onExclure: (p: ParticipantListe) => void
+  /** Si fourni : lien vers la vue formateur de suivi des ateliers (nouvel onglet). */
+  sessionId?: string
 }) {
   const [ouvert, setOuvert] = useState(false)
   return (
@@ -30,6 +33,16 @@ export default function MenuModeration({
               Fermer
             </button>
           </div>
+          {sessionId && (
+            <a
+              href={`/presenter/${sessionId}/suivi`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-2 flex min-h-[44px] items-center text-base font-semibold underline"
+            >
+              Suivi des ateliers (nouvel onglet)
+            </a>
+          )}
           {participants.length === 0 ? (
             <p className="text-base">Personne n'est dans la salle pour l'instant.</p>
           ) : (

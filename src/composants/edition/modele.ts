@@ -1,6 +1,8 @@
 // Modèle d'édition d'un quiz + validation qui reflète les contraintes CHECK de la base.
 
-export type TypeQuestion = 'qcm' | 'qcm_multiple' | 'nuage' | 'ouverte' | 'echelle'
+import { LIMITES_ATELIER, estLienHttps, type FichierAtelier, type LienAtelier, type PromptAtelier } from '../../lib/atelier'
+
+export type TypeQuestion = 'qcm' | 'qcm_multiple' | 'nuage' | 'ouverte' | 'echelle' | 'atelier'
 
 export const TYPES: { valeur: TypeQuestion; libelle: string }[] = [
   { valeur: 'qcm', libelle: 'Choix multiple (une bonne réponse)' },
@@ -9,6 +11,8 @@ export const TYPES: { valeur: TypeQuestion; libelle: string }[] = [
   { valeur: 'ouverte', libelle: 'Question ouverte' },
   { valeur: 'echelle', libelle: 'Échelle de 1 à 5' },
 ]
+
+export const LIBELLE_ATELIER = 'Atelier à son rythme'
 
 export const DUREES = [15, 20, 30, 45, 60, 90, 120]
 
@@ -41,6 +45,95 @@ export interface QuestionEdition {
   // « Propositions en photos » (QCM) : null = option désactivée ; sinon une entrée par proposition, '' = photo pas encore ajoutée.
   // Toujours de la même longueur que `choix` et dans le même ordre.
   imagesChoix: string[] | null
+  /** Atelier seulement : étapes dans l'ordre. `enonce` = titre de l'atelier, `explication` = consigne générale (facultative). */
+  etapes: EtapeEdition[]
+}
+
+// Une étape d'atelier, telle qu'elle est éditée (table `etapes_atelier`).
+export interface EtapeEdition {
+  id: string
+  titre: string
+  consigne: string // Markdown simple
+  fichiers: FichierAtelier[]
+  liens: LienAtelier[]
+  prompts: PromptAtelier[]
+  renduAttendu: boolean
+}
+
+export function nouvelleEtape(): EtapeEdition {
+  return { id: crypto.randomUUID(), titre: '', consigne: '', fichiers: [], liens: [], prompts: [], renduAttendu: false }
+}
+
+export interface LigneEtape {
+  id: string
+  question_id: string
+  ordre: number
+  titre: string
+  consigne: string | null
+  fichiers: FichierAtelier[] | null
+  liens: LienAtelier[] | null
+  prompts: PromptAtelier[] | null
+  rendu_attendu: boolean | null
+}
+export const COLONNES_ETAPES = 'id, question_id, ordre, titre, consigne, fichiers, liens, prompts, rendu_attendu'
+
+export function etapeDepuisLigne(l: LigneEtape): EtapeEdition {
+  return {
+    id: l.id,
+    titre: l.titre,
+    consigne: l.consigne ?? '',
+    fichiers: l.fichiers ?? [],
+    liens: l.liens ?? [],
+    prompts: l.prompts ?? [],
+    renduAttendu: l.rendu_attendu ?? false,
+  }
+}
+
+export function etapeVersLigne(e: EtapeEdition, questionId: string, ordre: number) {
+  return {
+    id: e.id,
+    question_id: questionId,
+    ordre,
+    titre: e.titre.trim(),
+    consigne: e.consigne.trim(),
+    fichiers: e.fichiers,
+    liens: e.liens.map((l) => ({ url: l.url.trim(), libelle: l.libelle.trim() })),
+    prompts: e.prompts.map((p) => ({ titre: p.titre.trim(), texte: p.texte.trim() })),
+    rendu_attendu: e.renduAttendu,
+  }
+}
+
+export interface ErreursEtape {
+  titre?: string
+  consigne?: string
+  liens?: string
+  prompts?: string
+}
+
+export function validerEtape(e: EtapeEdition): ErreursEtape {
+  const r: ErreursEtape = {}
+  const titre = e.titre.trim()
+  if (!titre) r.titre = "Donne un titre à l'étape."
+  else if (titre.length > LIMITES_ATELIER.titreEtape) r.titre = `Le titre de l'étape est trop long (${LIMITES_ATELIER.titreEtape} caractères maximum).`
+  if (e.consigne.trim().length > LIMITES_ATELIER.consigne) r.consigne = `La consigne est trop longue (${LIMITES_ATELIER.consigne} caractères maximum).`
+  if (e.liens.some((l) => !estLienHttps(l.url) || !l.url.trim().toLowerCase().startsWith('https://'))) {
+    r.liens = "Chaque lien doit commencer par https://. Corrige-le ou retire-le."
+  } else if (e.liens.some((l) => !l.libelle.trim() || l.libelle.trim().length > LIMITES_ATELIER.libelleLien)) {
+    r.liens = `Donne un nom à chaque lien (${LIMITES_ATELIER.libelleLien} caractères maximum).`
+  }
+  if (e.prompts.some((p) => !p.titre.trim() || !p.texte.trim())) {
+    r.prompts = 'Remplis le titre et le texte de chaque prompt, ou retire ceux qui sont vides.'
+  } else if (e.prompts.some((p) => p.texte.trim().length > LIMITES_ATELIER.texteprompt || p.titre.trim().length > LIMITES_ATELIER.titrePrompt)) {
+    r.prompts = `Un prompt est trop long (${LIMITES_ATELIER.texteprompt} caractères maximum pour le texte).`
+  }
+  if (e.fichiers.length > LIMITES_ATELIER.fichiers || e.liens.length > LIMITES_ATELIER.liens || e.prompts.length > LIMITES_ATELIER.prompts) {
+    r.prompts = r.prompts ?? 'Pas plus de 10 fichiers, 10 liens et 10 prompts par étape.'
+  }
+  return r
+}
+
+export function etapeAErreur(e: ErreursEtape): boolean {
+  return Object.keys(e).length > 0
 }
 
 // Moments de célébration : « après la question N, afficher ce message à toute la salle ».
@@ -94,12 +187,18 @@ export function nouvelleQuestion(type: TypeQuestion): QuestionEdition {
     explication: '',
     image: null,
     imagesChoix: null,
+    etapes: type === 'atelier' ? [nouvelleEtape()] : [],
   }
 }
 
 export function dupliquerQuestion(q: QuestionEdition): QuestionEdition {
   // Les fichiers photo sont partagés avec l'original (seuls les chemins sont copiés).
-  return { ...q, id: crypto.randomUUID(), choix: [...q.choix], bonnes: [...q.bonnes], imagesChoix: q.imagesChoix ? [...q.imagesChoix] : null }
+  return {
+    ...q,
+    id: crypto.randomUUID(),
+    etapes: q.etapes.map((e) => ({ ...e, id: crypto.randomUUID(), fichiers: [...e.fichiers], liens: [...e.liens], prompts: [...e.prompts] })),
+    choix: [...q.choix], bonnes: [...q.bonnes], imagesChoix: q.imagesChoix ? [...q.imagesChoix] : null,
+  }
 }
 
 export const lettrePhoto = (i: number) => String.fromCharCode(65 + i)
@@ -199,7 +298,7 @@ export interface LigneQuestion {
   images_choix?: string[] | null
 }
 
-export function depuisLigne(l: LigneQuestion): QuestionEdition {
+export function depuisLigne(l: LigneQuestion, etapes: EtapeEdition[] = []): QuestionEdition {
   return {
     id: l.id,
     type: l.type,
@@ -214,6 +313,7 @@ export function depuisLigne(l: LigneQuestion): QuestionEdition {
     explication: l.explication ?? '',
     image: l.image_question ?? null,
     imagesChoix: l.images_choix ?? null,
+    etapes,
   }
 }
 
@@ -221,6 +321,7 @@ export function versLigne(q: QuestionEdition, quizId: string, ordre: number) {
   const qcm = estQcm(q.type)
   const multiple = q.type === 'qcm_multiple'
   const echelle = q.type === 'echelle'
+  const atelier = q.type === 'atelier'
   return {
     id: q.id,
     quiz_id: quizId,
@@ -235,7 +336,7 @@ export function versLigne(q: QuestionEdition, quizId: string, ordre: number) {
     libelle_max: echelle && q.libelleMax.trim() ? q.libelleMax.trim() : null,
     duree_secondes: q.duree,
     explication: q.explication.trim() ? q.explication.trim() : null,
-    image_question: q.image || null,
+    image_question: atelier ? null : q.image || null,
     images_choix: qcm && q.imagesChoix ? q.imagesChoix.map((c) => c.trim()) : null,
   }
 }
@@ -247,11 +348,26 @@ export interface ErreursQuestion {
   libelles?: string
   explication?: string
   photosChoix?: string
+  /** Atelier : au moins une étape. */
+  etapes?: string
+  /** Atelier : une entrée par étape (même ordre). */
+  detailEtapes?: ErreursEtape[]
 }
 
 export function validerQuestion(q: QuestionEdition): ErreursQuestion {
   const e: ErreursQuestion = {}
   const enonce = q.enonce.trim()
+  if (q.type === 'atelier') {
+    if (!enonce) e.enonce = "Donne un titre à l'atelier."
+    else if (enonce.length > LIMITES.enonce) e.enonce = `Le titre est trop long (${LIMITES.enonce} caractères maximum).`
+    if (q.explication.trim().length > LIMITES.explication) {
+      e.explication = `La consigne générale est trop longue (${LIMITES.explication} caractères maximum).`
+    }
+    if (q.etapes.length === 0) e.etapes = 'Ajoute au moins une étape à cet atelier.'
+    const details = q.etapes.map(validerEtape)
+    if (details.some(etapeAErreur)) e.detailEtapes = details
+    return e
+  }
   if (!enonce && !q.image) e.enonce = 'Écris la question, ou ajoute une photo.'
   else if (enonce.length > LIMITES.enonce) e.enonce = `La question est trop longue (${LIMITES.enonce} caractères maximum).`
 

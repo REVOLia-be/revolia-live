@@ -3,11 +3,12 @@ import { appelerRpc } from './api'
 import { estErreurReseau, messageErreur } from './erreurs'
 import { lireDate } from './horloge'
 import { supabase } from './supabase'
+import type { EtapeAtelier } from './atelier'
 
 // --- Formats renvoyés par la base (voir supabase/migrations/…_fonctions.sql) ----------------
 
 export type NomEtat = 'attente' | 'question' | 'resultats' | 'bilan' | 'terminee'
-export type TypeQuestion = 'qcm' | 'qcm_multiple' | 'nuage' | 'ouverte' | 'echelle'
+export type TypeQuestion = 'qcm' | 'qcm_multiple' | 'nuage' | 'ouverte' | 'echelle' | 'atelier'
 
 export interface Jauge {
   points: number
@@ -35,6 +36,24 @@ export interface QuestionCourante {
   nb_reponses: number
   /** qcm_multiple : nombre de bonnes réponses si le formateur l'annonce, sinon null (jamais les indices avant la fermeture). */
   nb_bonnes?: number | null
+  /** Atelier : étapes figées de la session, dans l'ordre. `enonce` = titre de l'atelier, `explication` = consigne générale. */
+  etapes?: EtapeAtelier[]
+  /** Atelier : consigne générale facultative (peut aussi arriver dans `explication`). */
+  explication?: string | null
+}
+
+/** Atelier en cours : chiffres collectifs seulement, pour tous (jamais de pseudo). */
+export interface EtatAtelier {
+  repartition: number[] // personnes à chaque étape (1..N)
+  ont_termine: number
+  nb_bloques: number
+}
+
+export interface MaProgression {
+  etape: number // 1 = première étape ; N + 1 = terminé
+  termine: boolean
+  bloque: boolean
+  en_route: boolean
 }
 
 export interface ResultatsQuestion {
@@ -107,6 +126,12 @@ export interface EtatSession {
   celebration?: string | null
   bilan?: Bilan
   mon_score?: MonScore | null // participant seulement (bilan / terminee) ; peut être absent
+  /** Atelier courant : répartition collective par étape. */
+  atelier?: EtatAtelier
+  /** Rendu choisi par le formateur pour être projeté. Jamais de pseudo. */
+  rendu_projete?: { texte: string; etape_titre: string } | null
+  ma_progression?: MaProgression | null // participant seulement
+  mes_rendus?: Record<string, string> | null // participant seulement : id d'étape -> texte
 }
 
 export interface ParticipantListe {
@@ -219,6 +244,12 @@ export function useEtatSession(sessionId: string | undefined, options: Options =
           demander,
         )
     }
+    // Ateliers : l'écran projeté suit la progression ; chaque téléphone suit la sienne (la sécurité de la base ne lui envoie que ses lignes).
+    canal = canal.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'progression_atelier', filter: `session_id=eq.${sessionId}` },
+      demander,
+    )
     canal.subscribe((statut) => {
       if (!actif) return
       if (statut === 'SUBSCRIBED') {

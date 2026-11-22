@@ -40,6 +40,9 @@
   --couleur-discret: color-mix(in srgb, var(--couleur-vert-fonce) 65%, var(--couleur-blanc)); /* exemples, textes secondaires : ≥ 3,4:1 sur blanc */
   --couleur-inactif: color-mix(in srgb, var(--couleur-vert-fonce) 80%, var(--couleur-blanc)); /* boutons désactivés lisibles */
 
+  /* Fond très doux (8 % de vert sur blanc) pour les cartes de prompt et d'aperçu. Pas du vert clair : celui-ci n'est jamais un fond. */
+  --couleur-doux: color-mix(in srgb, var(--couleur-vert) 8%, var(--couleur-blanc));
+
   /* Titres : iBrand (une seule graisse, toujours en font-weight 400), repli Poppins. */
   --police-titre: 'iBrand', 'Poppins', system-ui, sans-serif;
   --police-texte: 'Poppins', system-ui, sans-serif;
