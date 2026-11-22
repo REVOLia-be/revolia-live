@@ -43,12 +43,16 @@ insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse
   ('10000000-0000-0000-0000-000000000001', 6, 'qcm',     'Q6', '{A,B}',   1, 30),
   ('10000000-0000-0000-0000-000000000001', 7, 'qcm',     'Q7', '{A,B}',   1, 30);
 update public.questions set explication = 'Parce que B.' where ordre = 1;
+update public.quiz set paliers = '{0.3,0.6}';
+select test.doit_echouer($$update public.quiz set paliers = '{0.6,0.3}'$$, 'quiz_paliers_valides');
+select test.doit_echouer($$update public.quiz set paliers = '{0.2,0.4,0.6,0.7,0.8,0.9}'$$, 'quiz_paliers_valides');
 select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse)
   values ('10000000-0000-0000-0000-000000000001', 8, 'qcm', 'X', '{A,B}', 5)$$, 'qcm_coherent');
 select set_config('test.session', (public.lancer_session('10000000-0000-0000-0000-000000000001', true, '{Table 1,Table 2}')->>'session_id'), false);
 select set_config('test.code', (select code from public.sessions where id = current_setting('test.session')::uuid), false);
 select set_config('test.table1', (select id::text from public.tables_salle where ordre = 1), false);
 select test.verifier((select count(*) from public.questions_session) = 7, 'questions copiées à la session');
+select test.verifier((select paliers from public.sessions) = '{0.3,0.6}', 'paliers du quiz copiés dans la session');
 reset role;
 
 -- ===== Intrus (connecté mais pas formateur) =====
