@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
+import CarteQuiz, { GrilleQuiz, resumerQuestions, type DonneesCarteQuiz } from '../composants/CarteQuiz'
 import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
+import SelecteurVue, { usePreferenceVue } from '../composants/SelecteurVue'
 import { appelerRpc } from '../lib/api'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
@@ -20,13 +22,9 @@ interface FicheFormateur {
   derniere_session: string | null
 }
 
-interface LigneQuizAdmin {
-  id: string
-  titre: string
+interface LigneQuizAdmin extends DonneesCarteQuiz {
   formateur_id: string
-  modifie_le: string | null
   cree_le: string
-  nb_questions: number
 }
 
 type Onglet = 'quiz' | 'formateurs' | 'utilisation'
@@ -172,11 +170,12 @@ function OngletQuiz({
   const [info, setInfo] = useState<string | null>(null)
   const [occupe, setOccupe] = useState<string | null>(null)
   const [aSupprimer, setASupprimer] = useState<string | null>(null)
+  const [vue, setVue] = usePreferenceVue('revolia-live:vue-quiz:admin', 'liste')
 
   const charger = useCallback(async () => {
     const { data, error } = await supabase
       .from('quiz')
-      .select('id, titre, formateur_id, modifie_le, cree_le, questions(count)')
+      .select('id, titre, description, formateur_id, modifie_le, cree_le, questions(type, image_question, ordre)')
       .order('modifie_le', { ascending: false, nullsFirst: false })
     if (error) {
       setErreur(messageErreur(error))
@@ -187,17 +186,19 @@ function OngletQuiz({
         (q: {
           id: string
           titre: string
+          description: string | null
           formateur_id: string
           modifie_le: string | null
           cree_le: string
-          questions: { count: number }[]
+          questions: { type: string; image_question: string | null; ordre: number }[]
         }) => ({
           id: q.id,
           titre: q.titre,
+          description: q.description,
           formateur_id: q.formateur_id,
           modifie_le: q.modifie_le,
           cree_le: q.cree_le,
-          nb_questions: q.questions?.[0]?.count ?? 0,
+          ...resumerQuestions(q.questions),
         }),
       ),
     )
@@ -249,6 +250,7 @@ function OngletQuiz({
 
   return (
     <section className="flex flex-col gap-4">
+      <SelecteurVue vue={vue} onChange={setVue} />
       <label className="flex flex-col gap-1 text-base font-semibold">
         Rechercher par titre ou par auteur
         <input
@@ -277,7 +279,23 @@ function OngletQuiz({
         </Carte>
       )}
 
-      {visibles.map((q) => (
+      {vue === 'cartes' && visibles.length > 0 && (
+        <GrilleQuiz>
+          {visibles.map((q) => (
+            <CarteQuiz
+              key={q.id}
+              quiz={{ ...q, modifie_le: q.modifie_le ?? q.cree_le }}
+              auteur={`${nomAuteur(q)}${q.formateur_id === moi ? ' (toi)' : ''}`}
+              action={{ libelle: 'Modifier', onChoisir: () => navigate(`/formateur/quiz/${q.id}`) }}
+              menu={[{ libelle: 'Dupliquer dans mes quiz', onChoisir: () => void dupliquer(q) }]}
+              occupe={occupe === q.id}
+              onSupprimer={() => supprimer(q)}
+            />
+          ))}
+        </GrilleQuiz>
+      )}
+
+      {vue === 'liste' && visibles.map((q) => (
         <Carte key={q.id} className="flex flex-col gap-4">
           <div>
             <h2 className="text-2xl">{q.titre}</h2>

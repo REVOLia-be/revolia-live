@@ -2,20 +2,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
+import CarteQuiz, { GrilleQuiz, resumerQuestions, type DonneesCarteQuiz } from '../composants/CarteQuiz'
 import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
+import SelecteurVue, { usePreferenceVue } from '../composants/SelecteurVue'
 import PanneauLancement from '../composants/edition/PanneauLancement'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
 import { dupliquerQuiz } from '../lib/quiz'
 import { supabase } from '../lib/supabase'
 
-interface LigneQuiz {
-  id: string
-  titre: string
-  description: string | null
-  nb_questions: number
-}
+type LigneQuiz = DonneesCarteQuiz
 
 // Quiz de démonstration : trois QCM simples sur l'IA, pour tester sans rien préparer.
 const QUIZ_DEMO = {
@@ -97,12 +94,14 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
   const [quiz, setQuiz] = useState<LigneQuiz[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [creation, setCreation] = useState(false)
+  const [vue, setVue] = usePreferenceVue('revolia-live:vue-quiz:mes-quiz', 'cartes')
+  const [occupe, setOccupe] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const charger = useCallback(async () => {
     const { data, error } = await supabase
       .from('quiz')
-      .select('id, titre, description, questions(count)')
+      .select('id, titre, description, modifie_le, cree_le, questions(type, image_question, ordre)')
       .eq('formateur_id', formateurId) // un admin voit tous les quiz : ici, seulement les siens
       .order('cree_le', { ascending: false })
     if (error) {
@@ -111,18 +110,50 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
     }
     setErreur(null)
     setQuiz(
-      (data ?? []).map((q: { id: string; titre: string; description: string | null; questions: { count: number }[] }) => ({
-        id: q.id,
-        titre: q.titre,
-        description: q.description,
-        nb_questions: q.questions?.[0]?.count ?? 0,
-      })),
+      (data ?? []).map(
+        (q: {
+          id: string
+          titre: string
+          description: string | null
+          modifie_le: string | null
+          cree_le: string
+          questions: { type: string; image_question: string | null; ordre: number }[]
+        }) => ({
+          id: q.id,
+          titre: q.titre,
+          description: q.description,
+          modifie_le: q.modifie_le ?? q.cree_le,
+          ...resumerQuestions(q.questions),
+        }),
+      ),
     )
   }, [formateurId])
 
   useEffect(() => {
     void charger()
   }, [charger])
+
+  async function dupliquerCarte(q: LigneQuiz) {
+    setOccupe(q.id)
+    setErreur(null)
+    try {
+      await dupliquerQuiz(q.id, formateurId)
+      await charger()
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setOccupe(null)
+    }
+  }
+
+  async function supprimerCarte(q: LigneQuiz) {
+    setOccupe(q.id)
+    setErreur(null)
+    const { error } = await supabase.from('quiz').delete().eq('id', q.id)
+    if (error) setErreur(messageErreur(error))
+    else await charger()
+    setOccupe(null)
+  }
 
   async function creerNouveau() {
     setCreation(true)
@@ -175,7 +206,7 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-10">
+    <main className={`mx-auto flex min-h-dvh w-full flex-col gap-6 px-4 py-10 ${vue === 'cartes' ? 'max-w-7xl' : 'max-w-3xl'}`}>
       <LogoMarque variante="vif" className="h-6 self-start" />
       <div className="flex flex-wrap gap-6">
         <Link to="/formateur/sessions" className="self-start text-base text-vert underline">
@@ -191,6 +222,7 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
         )}
       </div>
       <h1 className="text-4xl">Mes quiz</h1>
+      <SelecteurVue vue={vue} onChange={setVue} />
 
       {erreur && (
         <p role="alert" className="text-lg font-semibold">
@@ -204,7 +236,24 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
           <p className="text-lg">Tu n'as pas encore de quiz. Crée un nouveau quiz, ou le quiz de démonstration pour essayer.</p>
         </Carte>
       )}
-      {quiz?.map((q) => <CarteQuiz key={q.id} quiz={q} formateurId={formateurId} onChange={charger} onErreur={setErreur} />)}
+      {quiz && quiz.length > 0 && vue === 'liste' && quiz.map((q) => <LigneListeQuiz key={q.id} quiz={q} formateurId={formateurId} onChange={charger} onErreur={setErreur} />)}
+      {quiz && quiz.length > 0 && vue === 'cartes' && (
+        <GrilleQuiz>
+          {quiz.map((q) => (
+            <CarteQuiz
+              key={q.id}
+              quiz={q}
+              lancement
+              occupe={occupe === q.id}
+              menu={[
+                { libelle: 'Modifier', onChoisir: () => navigate(`/formateur/quiz/${q.id}`) },
+                { libelle: 'Dupliquer', onChoisir: () => void dupliquerCarte(q) },
+              ]}
+              onSupprimer={() => supprimerCarte(q)}
+            />
+          ))}
+        </GrilleQuiz>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Bouton type="button" onClick={creerNouveau} disabled={creation}>
@@ -219,7 +268,7 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
   )
 }
 
-function CarteQuiz({
+function LigneListeQuiz({
   quiz,
   formateurId,
   onChange,
