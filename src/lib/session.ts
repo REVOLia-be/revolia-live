@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 // --- Formats renvoyés par la base (voir supabase/migrations/…_fonctions.sql) ----------------
 
 export type NomEtat = 'attente' | 'question' | 'resultats' | 'bilan' | 'terminee'
-export type TypeQuestion = 'qcm' | 'nuage' | 'ouverte' | 'echelle'
+export type TypeQuestion = 'qcm' | 'qcm_multiple' | 'nuage' | 'ouverte' | 'echelle'
 
 export interface Jauge {
   points: number
@@ -29,6 +29,8 @@ export interface QuestionCourante {
   ouverte_le: string | null
   fin_reponses_le: string | null
   nb_reponses: number
+  /** qcm_multiple : nombre de bonnes réponses si le formateur l'annonce, sinon null (jamais les indices avant la fermeture). */
+  nb_bonnes?: number | null
 }
 
 export interface ResultatsQuestion {
@@ -36,6 +38,8 @@ export interface ResultatsQuestion {
   nb_reponses: number
   // QCM
   bonne_reponse?: number
+  // QCM à plusieurs bonnes réponses (repartition = personnes ayant coché chaque proposition)
+  bonnes_reponses?: number[]
   repartition?: number[]
   taux_reussite?: number | null
   // Échelle (repartition = nombre de réponses pour 1, 2, 3, 4, 5)
@@ -47,8 +51,10 @@ export interface ResultatsQuestion {
   // « Pourquoi ? » : facultatif, renvoyé seulement après la fermeture de la question
   explication?: string | null
   // Côté participant uniquement
-  ma_reponse?: number | string | null
+  ma_reponse?: number | number[] | string | null
   est_correcte?: boolean | null
+  /** qcm_multiple : au moins une bonne réponse trouvée, sans avoir tout bon. */
+  presque?: boolean
   ma_contribution?: number
 }
 
@@ -69,6 +75,16 @@ export interface Bilan {
   mentions: Mention[]
 }
 
+/** Parcours personnel, côté participant uniquement, en état « bilan » ou « terminee ». Jamais affiché sur l'écran projeté. */
+export interface MonScore {
+  questions_posees: number
+  reponses_donnees: number
+  qcm_poses: number
+  qcm_justes: number
+  qcm_presque: number
+  contribution: number
+}
+
 export interface EtatSession {
   maintenant: string
   session_id: string
@@ -86,6 +102,7 @@ export interface EtatSession {
   /** Message de célébration à afficher (état « résultats », question choisie par le formateur), sinon null. */
   celebration?: string | null
   bilan?: Bilan
+  mon_score?: MonScore | null // participant seulement (bilan / terminee) ; peut être absent
 }
 
 export interface ParticipantListe {

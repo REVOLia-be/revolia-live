@@ -36,7 +36,17 @@ export default function EcranQuestion({ etat, secondes, enCours, erreur, onArret
                 Question {question.ordre} sur {etat.nb_questions}
               </p>
               <h1 data-texte-principal className="[overflow-wrap:anywhere] text-[0.95em] leading-tight">{question.enonce}</h1>
-              <p className="mt-[0.5vh] [font-size:max(0.5em,14px)]">Réponds sur ton téléphone</p>
+              <p className="mt-[0.5vh] [font-size:max(0.5em,14px)]">
+                {question.type === 'qcm_multiple' ? (
+                  <>
+                    <strong className="font-bold text-vertClair">
+                      {question.nb_bonnes ? `${question.nb_bonnes} bonnes réponses` : 'Plusieurs réponses possibles'}
+                    </strong>
+                    {' · '}
+                  </>
+                ) : null}
+                Réponds sur ton téléphone
+              </p>
             </div>
             <p
               role="timer"
@@ -47,7 +57,7 @@ export default function EcranQuestion({ etat, secondes, enCours, erreur, onArret
             </p>
           </div>
 
-          {question.type === 'qcm' && (
+          {(question.type === 'qcm' || question.type === 'qcm_multiple') && (
             <ul className={`grid shrink-0 gap-[1.5vh] ${deuxColonnes ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {(question.choix ?? []).map((texte, i) => (
                 <li key={i} className="flex items-center gap-[1.5vw] rounded-carte border-2 border-blanc px-[1.5vw] py-[1.5vh]">

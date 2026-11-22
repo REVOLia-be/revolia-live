@@ -1,5 +1,7 @@
 import Carte from '../Carte'
 import {
+  convertirQcm,
+  estQcm,
   DUREES,
   LIMITES,
   TYPES,
@@ -48,6 +50,7 @@ export default function EditeurQuestion({
 }) {
   const err = afficherErreurs ? erreurs : {}
   const libelleType = TYPES.find((t) => t.valeur === question.type)?.libelle ?? ''
+  const multiple = question.type === 'qcm_multiple'
   const maj = (partiel: Partial<QuestionEdition>) => onChange({ ...question, ...partiel })
 
   function changerChoix(i: number, valeur: string) {
@@ -64,7 +67,11 @@ export default function EditeurQuestion({
       if (bonne === i) bonne = null
       else if (bonne > i) bonne = bonne - 1
     }
-    maj({ choix: question.choix.filter((_, j) => j !== i), bonne })
+    const bonnes = question.bonnes.filter((b) => b !== i).map((b) => (b > i ? b - 1 : b))
+    maj({ choix: question.choix.filter((_, j) => j !== i), bonne, bonnes })
+  }
+  function basculerBonne(i: number) {
+    maj({ bonnes: question.bonnes.includes(i) ? question.bonnes.filter((b) => b !== i) : [...question.bonnes, i] })
   }
 
   return (
@@ -118,21 +125,33 @@ export default function EditeurQuestion({
         )}
       </div>
 
-      {question.type === 'qcm' && (
+      {estQcm(question.type) && (
         <fieldset>
-          <legend className="mb-1 text-base font-semibold">Propositions (coche la bonne réponse)</legend>
+          <legend className="mb-1 text-base font-semibold">
+            {multiple ? 'Propositions (coche toutes les bonnes réponses, au moins 2)' : 'Propositions (coche la bonne réponse)'}
+          </legend>
           <div className="flex flex-col gap-2">
             {question.choix.map((c, i) => (
               <div key={i}>
               <div className="flex items-center gap-3">
-                <input
-                  type="radio"
-                  name={`bonne-${question.id}`}
-                  checked={question.bonne === i}
-                  onChange={() => maj({ bonne: i })}
-                  className="h-6 w-6 shrink-0 accent-vert"
-                  aria-label={`Proposition ${i + 1} : bonne réponse`}
-                />
+                {multiple ? (
+                  <input
+                    type="checkbox"
+                    checked={question.bonnes.includes(i)}
+                    onChange={() => basculerBonne(i)}
+                    className="h-6 w-6 shrink-0 accent-vert"
+                    aria-label={`Proposition ${i + 1} : bonne réponse`}
+                  />
+                ) : (
+                  <input
+                    type="radio"
+                    name={`bonne-${question.id}`}
+                    checked={question.bonne === i}
+                    onChange={() => maj({ bonne: i })}
+                    className="h-6 w-6 shrink-0 accent-vert"
+                    aria-label={`Proposition ${i + 1} : bonne réponse`}
+                  />
+                )}
                 <input
                   value={c}
                   maxLength={LIMITES.choix}
@@ -166,6 +185,23 @@ export default function EditeurQuestion({
           </div>
           <Message texte={err.choix} />
           <Message texte={err.bonne} />
+          {multiple && (
+            <div className="mt-3">
+              <label className="flex min-h-[44px] items-center gap-3 text-base font-semibold">
+                <input
+                  type="checkbox"
+                  checked={question.annoncerNombre}
+                  onChange={(e) => maj({ annoncerNombre: e.target.checked })}
+                  className="h-6 w-6 shrink-0 accent-vert"
+                  aria-describedby={`aide-annonce-${question.id}`}
+                />
+                Annoncer le nombre de bonnes réponses aux participants
+              </label>
+              <p id={`aide-annonce-${question.id}`} className="ml-9 text-sm">
+                Coché : les participants lisent « Choisis {question.bonnes.length >= 2 ? question.bonnes.length : 'N'} réponses » et doivent en cocher exactement ce nombre. Décoché : ils cochent librement, c'est plus difficile.
+              </p>
+            </div>
+          )}
           <div className="mt-2">
             <button type="button" className={PETIT_BOUTON} onClick={ajouterChoix} disabled={question.choix.length >= LIMITES.choixMax}>
               + Ajouter une proposition
@@ -204,6 +240,19 @@ export default function EditeurQuestion({
           <div className="sm:col-span-2">
             <Message texte={err.libelles} />
           </div>
+        </div>
+      )}
+
+      {estQcm(question.type) && (
+        <div>
+          <button type="button" className={PETIT_BOUTON} onClick={() => onChange(convertirQcm(question, multiple ? 'qcm' : 'qcm_multiple'))}>
+            {multiple ? 'Passer en une seule bonne réponse' : 'Passer en plusieurs bonnes réponses'}
+          </button>
+          <p className="mt-1 text-sm">
+            {multiple
+              ? 'Tes propositions sont gardées ; seule la première bonne réponse cochée sera conservée.'
+              : 'Tes propositions sont gardées ; la bonne réponse actuelle reste cochée, tu pourras en cocher d\'autres.'}
+          </p>
         </div>
       )}
 
@@ -263,12 +312,25 @@ function Apercu({ question }: { question: QuestionEdition }) {
       <summary className="cursor-pointer text-base font-semibold">Aperçu côté participant</summary>
       <div className="mx-auto mt-3 flex max-w-xs flex-col gap-2 rounded-carte border border-vertClair/60 p-4">
         <p className="text-lg font-semibold">{question.enonce.trim() || 'Ta question apparaîtra ici'}</p>
+        {question.type === 'qcm_multiple' && (
+          <p className="text-base font-semibold">
+            {question.annoncerNombre && question.bonnes.length >= 2 ? `Choisis ${question.bonnes.length} réponses` : 'Plusieurs réponses possibles'}
+          </p>
+        )}
         {question.type === 'qcm' &&
           question.choix.map((c, i) => (
             <div key={i} className={cases}>
               {c.trim() || `Proposition ${i + 1}`}
             </div>
           ))}
+        {question.type === 'qcm_multiple' &&
+          question.choix.map((c, i) => (
+            <div key={i} className={`${cases} gap-3`}>
+              <span aria-hidden className="h-5 w-5 shrink-0 rounded-sm border-2 border-vert" />
+              {c.trim() || `Proposition ${i + 1}`}
+            </div>
+          ))}
+        {question.type === 'qcm_multiple' && <div className={`${cases} justify-center bg-vert font-semibold text-blanc`}>Valider</div>}
         {question.type === 'nuage' && <div className={`${cases} text-discret`}>Un mot ou une expression courte…</div>}
         {question.type === 'ouverte' && <div className={`${cases} min-h-[88px] items-start py-2 text-discret`}>Ta réponse…</div>}
         {question.type === 'echelle' && (

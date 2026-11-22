@@ -31,6 +31,7 @@ interface Proposition {
   enonce: string
   choix: string[] | null
   bonne_reponse: number | null
+  bonnes_reponses?: number[] | null
   libelle_min: string | null
   libelle_max: string | null
   duree_secondes: number
@@ -56,7 +57,9 @@ function versEdition(p: Proposition): QuestionEdition {
     type: p.type,
     enonce: p.enonce,
     choix: p.choix ?? [],
-    bonne: p.bonne_reponse,
+    bonne: p.type === 'qcm' ? p.bonne_reponse : null,
+    bonnes: p.type === 'qcm_multiple' ? p.bonnes_reponses ?? [] : [],
+    annoncerNombre: true,
     libelleMin: p.libelle_min ?? '',
     libelleMax: p.libelle_max ?? '',
     duree: p.duree_secondes,
@@ -378,14 +381,17 @@ export default function PanneauPropositions({ onAjouter, onFermer }: Props) {
                 <span>{l.courante.duree_secondes} s</span>
               </div>
               <p className="text-lg font-semibold">{l.courante.enonce}</p>
-              {l.courante.type === 'qcm' && (
+              {(l.courante.type === 'qcm' || l.courante.type === 'qcm_multiple') && (
                 <ul className="list-inside list-disc text-lg">
-                  {(l.courante.choix ?? []).map((c, i) => (
-                    <li key={i} className={i === l.courante.bonne_reponse ? 'font-semibold underline' : ''}>
+                  {(l.courante.choix ?? []).map((c, i) => {
+                    const bonne = l.courante.type === 'qcm' ? i === l.courante.bonne_reponse : (l.courante.bonnes_reponses ?? []).includes(i)
+                    return (
+                    <li key={i} className={bonne ? 'font-semibold underline' : ''}>
                       {c}
-                      {i === l.courante.bonne_reponse ? ' ✓' : ''}
+                      {bonne ? ' ✓' : ''}
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               )}
               {l.courante.explication && (

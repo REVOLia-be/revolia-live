@@ -4,7 +4,7 @@
 
 export interface LigneExport {
   question_ordre: number
-  question_type: 'qcm' | 'nuage' | 'ouverte' | 'echelle'
+  question_type: 'qcm' | 'qcm_multiple' | 'nuage' | 'ouverte' | 'echelle'
   question: string
   pseudo: string
   table_nom: string | null
@@ -28,6 +28,7 @@ const EN_TETES = [
 
 const TYPES: Record<LigneExport['question_type'], string> = {
   qcm: 'Choix multiple',
+  qcm_multiple: 'Choix multiple (plusieurs réponses)',
   nuage: 'Nuage de mots',
   ouverte: 'Question ouverte',
   echelle: 'Échelle',

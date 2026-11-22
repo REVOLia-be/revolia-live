@@ -62,6 +62,10 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
   const explication = resultats?.explication?.trim() ?? ''
   const repartition = resultats?.repartition ?? []
   const total = resultats?.nb_reponses ?? 0
+  const multiple = question.type === 'qcm_multiple'
+  // Personnes ayant trouvé toutes les bonnes réponses (QCM multiple) : déduit du taux de réussite en %.
+  const nbExacts = multiple ? Math.round(((resultats?.taux_reussite ?? 0) * total) / 100) : 0
+  const nbBonnesChoix = multiple ? (resultats?.bonnes_reponses ?? []).length : 0
 
   const bouton = dernier ? (
     <Bouton type="button" data-commande="suivant" onClick={onBilan} disabled={enCours}>
@@ -88,6 +92,7 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
                 {!compact && (
                   <p className="[font-size:max(0.5em,14px)] font-semibold text-vertClair">
                     Question {question.ordre} sur {etat.nb_questions}
+                    {multiple && ` · ${nbBonnesChoix} bonnes réponses`}
                   </p>
                 )}
                 <h1 data-texte-principal className="text-[0.95em] leading-tight [overflow-wrap:anywhere]">{question.enonce}</h1>
@@ -95,7 +100,7 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
 
               {etat.celebration && <EncartCelebration texte={etat.celebration} />}
 
-              {question.type === 'qcm' && resultats ? (
+              {(question.type === 'qcm' || question.type === 'qcm_multiple') && resultats ? (
                 <>
                   {/* Le libellé est AU-DESSUS de la barre : toujours blanc sur bleu violet, quel que soit le remplissage.
                       La barre ne sert qu'à mesurer. Bonne réponse : ✓, texte en gras, barre verte ; les autres restent neutres (pas de rouge). */}
@@ -105,7 +110,7 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
                       {(question.choix ?? []).map((texte, i) => {
                         const nombre = repartition[i] ?? 0
                         const part = total > 0 ? (nombre / total) * 100 : 0
-                        const bonne = i === resultats.bonne_reponse
+                        const bonne = multiple ? (resultats.bonnes_reponses ?? []).includes(i) : i === resultats.bonne_reponse
                         return (
                           <li key={i} className={`flex items-center gap-[1.5vw] ${compact ? '' : 'first:mt-auto last:mb-auto'}`}>
                             <span
@@ -139,7 +144,9 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
                   <p className="shrink-0 text-[0.75em] font-semibold text-vertClair">
                     {total === 0
                       ? "Personne n'a répondu cette fois."
-                      : `${repartition[resultats.bonne_reponse ?? 0] ?? 0} personne${(repartition[resultats.bonne_reponse ?? 0] ?? 0) > 1 ? 's' : ''} sur ${total} ${(repartition[resultats.bonne_reponse ?? 0] ?? 0) > 1 ? 'ont' : 'a'} choisi la bonne réponse`}
+                      : multiple
+                        ? `${nbExacts} personne${nbExacts > 1 ? 's' : ''} sur ${total} ${nbExacts > 1 ? 'ont' : 'a'} trouvé toutes les bonnes réponses`
+                        : `${repartition[resultats.bonne_reponse ?? 0] ?? 0} personne${(repartition[resultats.bonne_reponse ?? 0] ?? 0) > 1 ? 's' : ''} sur ${total} ${(repartition[resultats.bonne_reponse ?? 0] ?? 0) > 1 ? 'ont' : 'a'} choisi la bonne réponse`}
                   </p>
                 </>
               ) : resultats ? (

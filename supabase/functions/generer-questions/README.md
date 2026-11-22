@@ -11,6 +11,9 @@ Niveaux : `decouverte` (notions clés, vocabulaire), `intermediaire` (compréhen
 ## Explication « Pourquoi ? »
 Chaque question renvoyée porte une `explication` (texte, 2 à 3 phrases, 800 caractères maximum, `null` si vide), copiée telle quelle dans `questions.explication` quand le formateur ajoute la proposition. Elle est fidèle au document, bienveillante, et pour un QCM elle explique pourquoi la bonne réponse est juste et ce qui rend les distracteurs trompeurs. Le mode **Durcir** la réécrit avec la question. Elle n'est jamais envoyée aux participants avant la fermeture de la question (c'est la base qui tranche).
 
+## Choix multiple à plusieurs bonnes réponses (`qcm_multiple`)
+Type proposable en plus de `qcm`, `nuage`, `ouverte`, `echelle`. Schéma : `bonnes_reponses` (tableau d'indices, 0-based) ; convention pour les types non concernés : `bonne_reponse` = -1 sauf pour `qcm`, `bonnes_reponses` = `[]` sauf pour `qcm_multiple`. Consigne : 2 à 3 bonnes réponses parmi 4 à 5 propositions, distracteurs plausibles, explication qui justifie chaque bonne réponse. Revalidation stricte côté serveur (la question est écartée si les indices sont hors bornes, en double, moins de 2, ou si toutes les propositions sont bonnes). La réponse renvoie `bonnes_reponses` (tableau ou `null`) et `annoncer_nombre: true` (l'éditeur le coche par défaut ; le formateur peut le décocher). Le mode **Durcir** garde le type et le nombre de bonnes réponses.
+
 ## Règles des distracteurs (QCM)
 Elles sont dans la consigne système (`index.ts`) :
 - erreurs ou idées reçues réellement fréquentes chez les débutants, adaptées au niveau ;

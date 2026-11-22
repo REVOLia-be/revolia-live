@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BlocPourquoi from '../composants/BlocPourquoi'
 import Bouton from '../composants/Bouton'
@@ -10,7 +10,7 @@ import { assurerConnexionAnonyme } from '../lib/auth'
 import { codeErreur, messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
 import { lireSalle } from '../lib/memoire'
-import { lettre, useEtatSession, type EtatSession, type NomMention } from '../lib/session'
+import { lettre, useEtatSession, type EtatSession, type MonScore, type NomMention } from '../lib/session'
 
 // Étape 1 : s'assurer qu'on est connecté et retrouver l'identifiant de la session.
 export default function Jouer() {
@@ -164,6 +164,7 @@ function Ecran({
   }
 
   if (etat.etat === 'resultats' && etat.question) {
+    if (etat.question.type === 'qcm_multiple') return <EcranResultatsMultiple etat={etat} />
     return etat.question.type === 'qcm' ? <EcranResultats etat={etat} /> : <EcranResultatsLibre etat={etat} />
   }
 
@@ -209,7 +210,7 @@ function EcranQuestion({
   const aRepondu = envoyee || etat.a_repondu === true
   const tempsEcoule = secondes === 0
 
-  async function repondre(valeur: number | string) {
+  async function repondre(valeur: number | number[] | string) {
     if (envoi) return
     setEnvoi(true)
     setErreur(null)
@@ -274,6 +275,9 @@ function EcranQuestion({
           ))}
         </div>
       )}
+      {question.type === 'qcm_multiple' && (
+        <ChoixMultiples question={question} bloque={bloque} onValider={repondre} />
+      )}
       {question.type === 'echelle' && (
         <div className="flex flex-col gap-2">
           <div className="grid grid-cols-5 gap-2">
@@ -312,8 +316,11 @@ function EcranQuestion({
 }
 
 // Rappel lisible de ce que la personne a envoyé.
-function libelleReponse(question: NonNullable<EtatSession['question']>, valeur: number | string): string {
-  if (question.type === 'qcm' && typeof valeur === 'number') return `${lettre(valeur)} — ${question.choix?.[valeur] ?? ''}`
+function libelleReponse(question: NonNullable<EtatSession['question']>, valeur: number | number[] | string): string {
+  if (question.type === 'qcm_multiple' && Array.isArray(valeur)) {
+    return [...valeur].sort((a, b) => a - b).map((i) => `${lettre(i)} — ${question.choix?.[i] ?? ''}`).join(' ; ')
+  }
+  if (typeof valeur === 'number' && question.type === 'qcm') return `${lettre(valeur)} — ${question.choix?.[valeur] ?? ''}`
   if (question.type === 'echelle') return `${valeur} sur 5`
   return `« ${valeur} »`
 }
@@ -375,7 +382,7 @@ function Attente({ etat }: { etat: EtatSession }) {
 }
 
 // Titre du résultat : pictogramme + mot (+ contribution). Jamais de rouge.
-function Statut({ pastille, titre, sous, tracee = false }: { pastille: 'coche' | 'ampoule'; titre: string; sous?: string; tracee?: boolean }) {
+function Statut({ pastille, titre, sous, tracee = false }: { pastille: 'coche' | 'ampoule'; titre: string; sous?: ReactNode; tracee?: boolean }) {
   return (
     <div className="flex items-center gap-3.5">
       <span
@@ -385,7 +392,7 @@ function Statut({ pastille, titre, sous, tracee = false }: { pastille: 'coche' |
       </span>
       <div>
         <h1 className="text-[32px] leading-tight">{titre}</h1>
-        {sous && <p className="mt-0.5 text-lg font-bold text-vert">{sous}</p>}
+        {sous && <div className="mt-0.5 text-lg font-bold text-vert">{sous}</div>}
       </div>
     </div>
   )
@@ -419,6 +426,155 @@ function EcranResultats({ etat }: { etat: EtatSession }) {
           <LigneChoix lettreChoix={lettre(maReponse)} texte={question.choix?.[maReponse] ?? ''} />
         )}
         <LigneChoix lettreChoix={lettre(idxBonne)} texte={question.choix?.[idxBonne] ?? ''} bonne aussiMienne={juste} />
+      </div>
+      {etat.celebration && <EncartCelebration texte={etat.celebration} />}
+      <BlocPourquoi texte={resultats.explication} />
+      <Attente etat={etat} />
+    </>
+  )
+}
+
+// QCM à plusieurs bonnes réponses : cases à cocher (icône + style, jamais la couleur seule) puis « Valider ».
+function ChoixMultiples({
+  question,
+  bloque,
+  onValider,
+}: {
+  question: NonNullable<EtatSession['question']>
+  bloque: boolean
+  onValider: (indices: number[]) => void
+}) {
+  const [choisis, setChoisis] = useState<number[]>([])
+  const [envoye, setEnvoye] = useState(false) // pas de double envoi
+  const attendu = question.nb_bonnes ?? null
+  const bonNombre = choisis.length > 0 && (attendu === null || choisis.length === attendu)
+
+  function basculer(i: number) {
+    setChoisis((c) => (c.includes(i) ? c.filter((x) => x !== i) : [...c, i]))
+  }
+
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!bonNombre || bloque || envoye) return
+        setEnvoye(true)
+        onValider([...choisis].sort((a, b) => a - b))
+      }}
+    >
+      <p className="text-lg font-bold text-vert">{attendu !== null ? `Choisis ${attendu} réponses` : 'Plusieurs réponses possibles'}</p>
+      <div role="group" aria-label="Propositions" className="flex flex-col gap-3">
+        {(question.choix ?? []).map((texte, i) => {
+          const coche = choisis.includes(i)
+          return (
+            <button
+              key={i}
+              type="button"
+              role="checkbox"
+              aria-checked={coche}
+              disabled={bloque || envoye}
+              onClick={() => basculer(i)}
+              className={`flex min-h-[64px] w-full items-center gap-4 rounded-champ border-2 px-4 py-3 text-left text-lg font-semibold transition-colors disabled:opacity-50 ${
+                coche ? 'border-vert bg-vert text-blanc' : 'border-vert bg-blanc text-vertFonce'
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-[3px] ${
+                  coche ? 'border-blanc bg-blanc text-vert' : 'border-vertFonce bg-blanc text-vert'
+                }`}
+              >
+                {coche && <Coche taille={24} />}
+              </span>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{texte}</span>
+              {coche && <span className="shrink-0 text-sm font-bold">Choisie</span>}
+            </button>
+          )
+        })}
+      </div>
+      <p role="status" className="text-base font-semibold text-discret">
+        {attendu !== null ? `${choisis.length} / ${attendu} choisie${choisis.length > 1 ? 's' : ''}` : `${choisis.length} choisie${choisis.length > 1 ? 's' : ''}`}
+      </p>
+      <Bouton type="submit" disabled={!bonNombre || bloque || envoye}>
+        Valider
+      </Bouton>
+    </form>
+  )
+}
+
+// Ligne d'une proposition dans les résultats d'un QCM à plusieurs bonnes réponses.
+function LigneMultiple({ lettreChoix, texte, bonne, mienne }: { lettreChoix: string; texte: string; bonne: boolean; mienne: boolean }) {
+  return (
+    <div
+      className={`flex min-h-[60px] items-center gap-3 rounded-champ px-3 py-2 text-base font-semibold leading-tight ${
+        bonne ? 'bg-vert text-blanc' : mienne ? 'border-2 border-vertFonce' : 'border-2 border-dashed border-vertFonce/40 text-vertFonce'
+      }`}
+    >
+      <span className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-pilule ${bonne ? 'bg-blanc text-vert' : 'bg-vertFonce text-blanc'}`}>
+        {lettreChoix}
+      </span>
+      <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{texte}</span>
+      {(bonne || mienne) && (
+        <span className="ml-auto flex shrink-0 flex-col items-end gap-1">
+          {bonne && (
+            <span className="flex items-center gap-1 whitespace-nowrap rounded-pilule bg-blanc px-2 py-0.5 text-xs font-bold text-vert">
+              <Coche taille={14} />
+              Bonne réponse
+            </span>
+          )}
+          {mienne && (
+            <span
+              className={`flex items-center gap-1 whitespace-nowrap rounded-pilule px-2 py-0.5 text-xs font-bold ${
+                bonne ? 'bg-blanc text-vertFonce' : 'border-[1.5px] border-vertFonce'
+              }`}
+            >
+              <Personne />
+              Ta réponse
+            </span>
+          )}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function EcranResultatsMultiple({ etat }: { etat: EtatSession }) {
+  const question = etat.question!
+  const resultats = etat.resultats
+  if (!resultats || !resultats.bonnes_reponses) return <h1 className="text-3xl">Regarde l'écran</h1>
+
+  const bonnes = resultats.bonnes_reponses
+  const mes = Array.isArray(resultats.ma_reponse) ? resultats.ma_reponse : []
+  const aRepondu = Array.isArray(resultats.ma_reponse)
+  const exact = aRepondu && resultats.est_correcte === true
+  const presque = aRepondu && !exact && resultats.presque === true
+  const contribution = resultats.ma_contribution ?? (exact ? 2 : 1)
+
+  return (
+    <>
+      {exact ? (
+        <Statut pastille="coche" tracee titre="Bien vu !" sous={`+${contribution} pour la salle`} />
+      ) : presque ? (
+        <Statut
+          pastille="ampoule"
+          titre="Presque !"
+          sous={
+            <>
+              <p>Tu as trouvé une partie des bonnes réponses</p>
+              <p className="mt-0.5">+{contribution} pour la salle</p>
+            </>
+          }
+        />
+      ) : aRepondu ? (
+        <Statut pastille="ampoule" titre="Pas tout à fait" sous={`+${contribution} pour la salle quand même`} />
+      ) : (
+        <Statut pastille="ampoule" titre="Pas eu le temps" sous="Pas grave, à la prochaine question !" />
+      )}
+      <div className="flex flex-col gap-2">
+        {(question.choix ?? []).map((texte, i) => (
+          <LigneMultiple key={i} lettreChoix={lettre(i)} texte={texte} bonne={bonnes.includes(i)} mienne={mes.includes(i)} />
+        ))}
       </div>
       {etat.celebration && <EncartCelebration texte={etat.celebration} />}
       <BlocPourquoi texte={resultats.explication} />
@@ -536,6 +692,42 @@ const ECLATS = Array.from({ length: 14 }, (_, i) => ({
   distance: 56 + (i % 3) * 14,
 }))
 
+// Message d'encouragement : toujours positif, quel que soit le score.
+function encouragement(m: MonScore): string {
+  if (m.qcm_poses > 0) {
+    if (m.qcm_justes === m.qcm_poses) return 'Bravo, tu as tout trouvé !'
+    if (m.qcm_justes * 2 > m.qcm_poses) return 'Belle réussite : tu as bien avancé.'
+  }
+  return "Chaque question t'a fait avancer."
+}
+
+function Parcours({ score }: { score: MonScore }) {
+  return (
+    <section aria-labelledby="titre-parcours" className="rounded-carte border-2 border-vert px-[18px] py-4">
+      <h2 id="titre-parcours" className="text-xl">Ton parcours</h2>
+      <p className="mb-2 text-sm text-discret">Visible seulement par toi</p>
+      <ul className="flex flex-col gap-1.5 text-lg">
+        <li>
+          Tu as répondu à <strong>{score.reponses_donnees}</strong> question{score.reponses_donnees > 1 ? 's' : ''} sur {score.questions_posees}
+        </li>
+        {score.qcm_poses > 0 && (
+          <li>
+            Bonnes réponses aux QCM : <strong>{score.qcm_justes}</strong> sur {score.qcm_poses}
+            {score.qcm_presque > 0 && ` (et ${score.qcm_presque} presque)`}
+          </li>
+        )}
+        <li>
+          Ta contribution à la jauge de la salle : <strong className="text-vert">+{score.contribution}</strong>
+        </li>
+      </ul>
+      <p className="mt-3 flex items-center gap-2 text-lg font-bold text-vert">
+        <Coche taille={20} />
+        {encouragement(score)}
+      </p>
+    </section>
+  )
+}
+
 function EcranBilanParticipant({ etat }: { etat: EtatSession }) {
   const pseudo = (etat.moi?.pseudo ?? '').replace(/-/g, '\u2011')
   const mes = (etat.bilan?.mentions ?? []).filter((m) => m.pseudo === etat.moi?.pseudo)
@@ -574,6 +766,8 @@ function EcranBilanParticipant({ etat }: { etat: EtatSession }) {
           <div className="h-full rounded-pilule bg-vert" style={{ width: `${part}%` }} />
         </div>
       </section>
+
+      {etat.mon_score && <Parcours score={etat.mon_score} />}
 
       {mes.map((m, i) => (
         <p key={i} className="flex items-center gap-3 text-[17px] font-bold text-vert">

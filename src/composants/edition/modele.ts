@@ -1,9 +1,10 @@
 // Modèle d'édition d'un quiz + validation qui reflète les contraintes CHECK de la base.
 
-export type TypeQuestion = 'qcm' | 'nuage' | 'ouverte' | 'echelle'
+export type TypeQuestion = 'qcm' | 'qcm_multiple' | 'nuage' | 'ouverte' | 'echelle'
 
 export const TYPES: { valeur: TypeQuestion; libelle: string }[] = [
   { valeur: 'qcm', libelle: 'Choix multiple (une bonne réponse)' },
+  { valeur: 'qcm_multiple', libelle: 'Choix multiple (plusieurs bonnes réponses)' },
   { valeur: 'nuage', libelle: 'Nuage de mots' },
   { valeur: 'ouverte', libelle: 'Question ouverte' },
   { valeur: 'echelle', libelle: 'Échelle de 1 à 5' },
@@ -30,6 +31,8 @@ export interface QuestionEdition {
   enonce: string
   choix: string[]
   bonne: number | null
+  bonnes: number[] // qcm_multiple : indices (0-based) des bonnes réponses, au moins 2
+  annoncerNombre: boolean // qcm_multiple : dire aux participants combien il y a de bonnes réponses
   libelleMin: string
   libelleMax: string
   duree: number
@@ -70,13 +73,17 @@ export interface QuizEdition {
   questions: QuestionEdition[]
 }
 
+export const estQcm = (type: TypeQuestion) => type === 'qcm' || type === 'qcm_multiple'
+
 export function nouvelleQuestion(type: TypeQuestion): QuestionEdition {
   return {
     id: crypto.randomUUID(),
     type,
     enonce: '',
-    choix: type === 'qcm' ? ['', ''] : [],
+    choix: type === 'qcm' ? ['', ''] : type === 'qcm_multiple' ? ['', '', ''] : [],
     bonne: null,
+    bonnes: [],
+    annoncerNombre: true,
     libelleMin: '',
     libelleMax: '',
     duree: 30,
@@ -85,7 +92,18 @@ export function nouvelleQuestion(type: TypeQuestion): QuestionEdition {
 }
 
 export function dupliquerQuestion(q: QuestionEdition): QuestionEdition {
-  return { ...q, id: crypto.randomUUID(), choix: [...q.choix] }
+  return { ...q, id: crypto.randomUUID(), choix: [...q.choix], bonnes: [...q.bonnes] }
+}
+
+// Passe une question à choix entre « une bonne réponse » et « plusieurs bonnes réponses » sans toucher aux propositions.
+export function convertirQcm(q: QuestionEdition, vers: 'qcm' | 'qcm_multiple'): QuestionEdition {
+  if (q.type === vers || !estQcm(q.type)) return q
+  if (vers === 'qcm_multiple') {
+    return { ...q, type: vers, bonnes: q.bonne !== null ? [q.bonne] : [], bonne: null }
+  }
+  // Plusieurs -> une seule : on garde la première bonne réponse cochée.
+  const premiere = [...q.bonnes].sort((a, b) => a - b)[0]
+  return { ...q, type: vers, bonne: premiere ?? null, bonnes: [] }
 }
 
 // Ligne de la table `questions` telle que lue en base.
@@ -96,6 +114,8 @@ export interface LigneQuestion {
   enonce: string
   choix: string[] | null
   bonne_reponse: number | null
+  bonnes_reponses?: number[] | null
+  annoncer_nombre?: boolean | null
   libelle_min: string | null
   libelle_max: string | null
   duree_secondes: number
@@ -109,6 +129,8 @@ export function depuisLigne(l: LigneQuestion): QuestionEdition {
     enonce: l.enonce,
     choix: l.choix ?? [],
     bonne: l.bonne_reponse,
+    bonnes: l.bonnes_reponses ?? [],
+    annoncerNombre: l.annoncer_nombre ?? true,
     libelleMin: l.libelle_min ?? '',
     libelleMax: l.libelle_max ?? '',
     duree: l.duree_secondes,
@@ -117,7 +139,8 @@ export function depuisLigne(l: LigneQuestion): QuestionEdition {
 }
 
 export function versLigne(q: QuestionEdition, quizId: string, ordre: number) {
-  const qcm = q.type === 'qcm'
+  const qcm = estQcm(q.type)
+  const multiple = q.type === 'qcm_multiple'
   const echelle = q.type === 'echelle'
   return {
     id: q.id,
@@ -126,7 +149,9 @@ export function versLigne(q: QuestionEdition, quizId: string, ordre: number) {
     type: q.type,
     enonce: q.enonce.trim(),
     choix: qcm ? q.choix.map((c) => c.trim()) : null,
-    bonne_reponse: qcm ? q.bonne : null,
+    bonne_reponse: q.type === 'qcm' ? q.bonne : null,
+    bonnes_reponses: multiple ? [...new Set(q.bonnes)].sort((a, b) => a - b) : null,
+    annoncer_nombre: multiple ? q.annoncerNombre : true,
     libelle_min: echelle && q.libelleMin.trim() ? q.libelleMin.trim() : null,
     libelle_max: echelle && q.libelleMax.trim() ? q.libelleMax.trim() : null,
     duree_secondes: q.duree,
@@ -148,13 +173,22 @@ export function validerQuestion(q: QuestionEdition): ErreursQuestion {
   if (!enonce) e.enonce = 'Écris la question.'
   else if (enonce.length > LIMITES.enonce) e.enonce = `La question est trop longue (${LIMITES.enonce} caractères maximum).`
 
-  if (q.type === 'qcm') {
+  if (estQcm(q.type)) {
     if (q.choix.length < LIMITES.choixMin) e.choix = 'Ajoute au moins 2 propositions.'
     else if (q.choix.length > LIMITES.choixMax) e.choix = 'Pas plus de 6 propositions.'
     else if (q.choix.some((c) => !c.trim())) e.choix = 'Remplis chaque proposition, ou retire celles qui sont vides.'
     else if (q.choix.some((c) => c.trim().length > LIMITES.choix)) e.choix = `Une proposition est trop longue (${LIMITES.choix} caractères maximum).`
-    if (q.bonne === null || q.bonne < 0 || q.bonne >= q.choix.length) {
-      e.bonne = 'Indique la bonne réponse en cochant une proposition.'
+    if (q.type === 'qcm') {
+      if (q.bonne === null || q.bonne < 0 || q.bonne >= q.choix.length) {
+        e.bonne = 'Indique la bonne réponse en cochant une proposition.'
+      }
+    } else {
+      const valides = new Set(q.bonnes.filter((b) => Number.isInteger(b) && b >= 0 && b < q.choix.length))
+      if (valides.size < 2) {
+        e.bonne = 'Coche au moins 2 bonnes réponses. Pour une seule bonne réponse, passe la question en « une bonne réponse ».'
+      } else if (valides.size >= q.choix.length) {
+        e.bonne = 'Toutes les propositions sont cochées : laisse au moins une mauvaise proposition.'
+      }
     }
   }
   if (q.type === 'echelle') {
