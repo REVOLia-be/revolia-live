@@ -12,4 +12,5 @@ for f in ../migrations/*.sql; do
 done
 psql -v ON_ERROR_STOP=1 -d "$BASE" -f 10_scenario.sql
 psql -v ON_ERROR_STOP=1 -d "$BASE" -f 20_vue_participant.sql
+psql -v ON_ERROR_STOP=1 -d "$BASE" -f 30_admin.sql
 echo "✅ Tous les tests SQL sont passés."
