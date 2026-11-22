@@ -59,7 +59,6 @@ export default function EcranAttente({ etat, participants, enCours, erreur, onPr
         <Bouton type="button" data-commande="suivant" onClick={onPremiereQuestion} disabled={enCours}>
           Première question
         </Bouton>
-        <p className="text-center text-[max(14px,0.9em)] opacity-80">Astuce : tu peux avancer avec ta télécommande ou les flèches du clavier.</p>
         </>
       }
     >
