@@ -247,7 +247,7 @@ function CarteQuiz({
       nouveauId = copie.id
       const { data: lignes, error: e3 } = await supabase
         .from('questions')
-        .select('ordre, type, enonce, choix, bonne_reponse, libelle_min, libelle_max, duree_secondes')
+        .select('ordre, type, enonce, choix, bonne_reponse, libelle_min, libelle_max, duree_secondes, explication')
         .eq('quiz_id', quiz.id)
         .order('ordre')
       if (e3) throw e3

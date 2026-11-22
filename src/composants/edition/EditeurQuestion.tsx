@@ -192,6 +192,31 @@ export default function EditeurQuestion({
       )}
 
       <div>
+        <label className="mb-1 block text-base font-semibold" htmlFor={`explication-${question.id}`}>
+          Pourquoi ? (facultatif)
+        </label>
+        <p id={`aide-explication-${question.id}`} className="mb-1 text-sm">
+          2 ou 3 phrases qui expliquent la bonne réponse ou l'idée à retenir. Elles s'affichent après la question, jamais avant.
+        </p>
+        <textarea
+          id={`explication-${question.id}`}
+          rows={3}
+          maxLength={LIMITES.explication + 50}
+          aria-describedby={`aide-explication-${question.id}`}
+          value={question.explication}
+          onChange={(e) => maj({ explication: e.target.value })}
+          className={CHAMP}
+          placeholder="ex. Une IA peut se tromper avec assurance : relire prend deux minutes."
+        />
+        <div className="flex justify-between gap-4">
+          <Message texte={err.explication} />
+          <span className="ml-auto text-sm">
+            {question.explication.trim().length}/{LIMITES.explication}
+          </span>
+        </div>
+      </div>
+
+      <div>
         <label className="mr-3 text-base font-semibold" htmlFor={`duree-${question.id}`}>
           Temps pour répondre
         </label>
@@ -246,6 +271,12 @@ function Apercu({ question }: { question: QuestionEdition }) {
           </>
         )}
         <p className="text-sm">Temps : {question.duree} s</p>
+        {question.explication.trim() && (
+          <section className="rounded-champ border-2 border-l-8 border-vertFonce p-3">
+            <h4 className="font-titre text-lg">Pourquoi ?</h4>
+            <p className="text-base">{question.explication.trim()}</p>
+          </section>
+        )}
       </div>
     </details>
   )

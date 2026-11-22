@@ -15,6 +15,7 @@ export const LIMITES = {
   titre: 120,
   description: 500,
   enonce: 300,
+  explication: 500,
   libelleEchelle: 40,
   choixMin: 2,
   choixMax: 6,
@@ -29,6 +30,7 @@ export interface QuestionEdition {
   libelleMin: string
   libelleMax: string
   duree: number
+  explication: string // « Pourquoi ? » facultatif, affiché après la fermeture de la question
 }
 
 export interface QuizEdition {
@@ -47,6 +49,7 @@ export function nouvelleQuestion(type: TypeQuestion): QuestionEdition {
     libelleMin: '',
     libelleMax: '',
     duree: 30,
+    explication: '',
   }
 }
 
@@ -65,6 +68,7 @@ export interface LigneQuestion {
   libelle_min: string | null
   libelle_max: string | null
   duree_secondes: number
+  explication: string | null
 }
 
 export function depuisLigne(l: LigneQuestion): QuestionEdition {
@@ -77,6 +81,7 @@ export function depuisLigne(l: LigneQuestion): QuestionEdition {
     libelleMin: l.libelle_min ?? '',
     libelleMax: l.libelle_max ?? '',
     duree: l.duree_secondes,
+    explication: l.explication ?? '',
   }
 }
 
@@ -94,6 +99,7 @@ export function versLigne(q: QuestionEdition, quizId: string, ordre: number) {
     libelle_min: echelle && q.libelleMin.trim() ? q.libelleMin.trim() : null,
     libelle_max: echelle && q.libelleMax.trim() ? q.libelleMax.trim() : null,
     duree_secondes: q.duree,
+    explication: q.explication.trim() ? q.explication.trim() : null,
   }
 }
 
@@ -102,6 +108,7 @@ export interface ErreursQuestion {
   choix?: string
   bonne?: string
   libelles?: string
+  explication?: string
 }
 
 export function validerQuestion(q: QuestionEdition): ErreursQuestion {
@@ -122,6 +129,9 @@ export function validerQuestion(q: QuestionEdition): ErreursQuestion {
     if (q.libelleMin.trim().length > LIMITES.libelleEchelle || q.libelleMax.trim().length > LIMITES.libelleEchelle) {
       e.libelles = `Les libellés sont limités à ${LIMITES.libelleEchelle} caractères.`
     }
+  }
+  if (q.explication.trim().length > LIMITES.explication) {
+    e.explication = `Le « Pourquoi ? » est trop long (${LIMITES.explication} caractères maximum).`
   }
   return e
 }

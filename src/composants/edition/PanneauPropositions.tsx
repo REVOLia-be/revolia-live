@@ -34,6 +34,7 @@ interface Proposition {
   libelle_min: string | null
   libelle_max: string | null
   duree_secondes: number
+  explication: string | null
 }
 
 interface Ligne {
@@ -59,6 +60,7 @@ function versEdition(p: Proposition): QuestionEdition {
     libelleMin: p.libelle_min ?? '',
     libelleMax: p.libelle_max ?? '',
     duree: p.duree_secondes,
+    explication: p.explication ?? '',
   }
 }
 
@@ -385,6 +387,12 @@ export default function PanneauPropositions({ onAjouter, onFermer }: Props) {
                     </li>
                   ))}
                 </ul>
+              )}
+              {l.courante.explication && (
+                <p className="rounded-champ border-2 border-l-8 border-vertFonce px-3 py-2 text-base">
+                  <span className="font-semibold">Pourquoi ? </span>
+                  {l.courante.explication}
+                </p>
               )}
               {l.courante.type === 'echelle' && (l.courante.libelle_min || l.courante.libelle_max) && (
                 <p className="text-base">

@@ -8,6 +8,9 @@ Deux modes :
 
 Niveaux : `decouverte` (notions clés, vocabulaire), `intermediaire` (compréhension, cas concrets), `expert` (nuances, pièges, mises en situation). Chaque question renvoyée porte son `niveau`.
 
+## Explication « Pourquoi ? »
+Chaque question renvoyée porte une `explication` (texte, 2 à 3 phrases, 500 caractères maximum, `null` si vide), copiée telle quelle dans `questions.explication` quand le formateur ajoute la proposition. Elle est fidèle au document, bienveillante, et pour un QCM elle explique pourquoi la bonne réponse est juste et ce qui rend les distracteurs trompeurs. Le mode **Durcir** la réécrit avec la question. Elle n'est jamais envoyée aux participants avant la fermeture de la question (c'est la base qui tranche).
+
 ## Règles des distracteurs (QCM)
 Elles sont dans la consigne système (`index.ts`) :
 - erreurs ou idées reçues réellement fréquentes chez les débutants, adaptées au niveau ;

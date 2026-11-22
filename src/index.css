@@ -34,9 +34,31 @@
   .animation-confetti { animation: chute-confetti linear forwards; }
 }
 
+/* Trois gestes brefs, joués une seule fois : coche qui se trace, halo sur la bonne réponse, éclats de fin. */
+@keyframes trace-coche {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes halo-bonne-reponse {
+  0% { box-shadow: 0 0 0 0 var(--couleur-vert-clair); }
+  100% { box-shadow: 0 0 0 1.6rem transparent; }
+}
+@keyframes eclat {
+  0% { opacity: 1; transform: rotate(var(--angle)) translateY(0); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateY(var(--distance)); }
+}
+@layer utilities {
+  .coche-tracee { stroke-dasharray: 24; stroke-dashoffset: 24; animation: trace-coche 0.45s ease-out 0.15s forwards; }
+  .halo-bonne-reponse { animation: halo-bonne-reponse 1.2s ease-out 0.9s 1 both; }
+  .eclat { animation: eclat 0.9s ease-out 0.5s 1 both; }
+}
+
 /* « Moins d'animations » demandé par l'ordinateur : plus de confettis ni de rebonds. */
 @media (prefers-reduced-motion: reduce) {
   .animation-confetti { display: none; }
   .animation-apparition { animation: none; }
   .animate-bounce, .animate-pulse { animation: none; }
+  /* On voit directement l'état final : coche entière, pas de halo, pas d'éclats. */
+  .coche-tracee { animation: none; stroke-dashoffset: 0; }
+  .halo-bonne-reponse { animation: none; }
+  .eclat { display: none; }
 }

@@ -98,7 +98,7 @@ function Editeur({ quizId }: { quizId: string }) {
     }
     const { data: lignes, error: erreurQ } = await supabase
       .from('questions')
-      .select('id, ordre, type, enonce, choix, bonne_reponse, libelle_min, libelle_max, duree_secondes')
+      .select('id, ordre, type, enonce, choix, bonne_reponse, libelle_min, libelle_max, duree_secondes, explication')
       .eq('quiz_id', quizId)
       .order('ordre')
     if (erreurQ) {

@@ -43,6 +43,8 @@ export interface ResultatsQuestion {
   mots?: { mot: string; nombre: number }[]
   // Question ouverte (sans pseudo)
   reponses?: { id: string; texte: string; coup_de_coeur: boolean }[]
+  // « Pourquoi ? » : facultatif, renvoyé seulement après la fermeture de la question
+  explication?: string | null
   // Côté participant uniquement
   ma_reponse?: number | string | null
   est_correcte?: boolean | null
