@@ -39,3 +39,54 @@ export function Personne({ taille = 14, className }: Props) {
     </svg>
   )
 }
+
+export function Fichier({ taille = 24, className }: Props) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 24 24" strokeWidth={2} className={`block shrink-0 ${className ?? ''}`} {...BASE}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+    </svg>
+  )
+}
+
+export function Telecharger({ taille = 24, className }: Props) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 24 24" strokeWidth={2.4} className={`block shrink-0 ${className ?? ''}`} {...BASE}>
+      <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />
+    </svg>
+  )
+}
+
+export function LienExterne({ taille = 24, className }: Props) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 24 24" strokeWidth={2.2} className={`block shrink-0 ${className ?? ''}`} {...BASE}>
+      <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+    </svg>
+  )
+}
+
+export function Aide({ taille = 24, className }: Props) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 24 24" strokeWidth={2.2} className={`block shrink-0 ${className ?? ''}`} {...BASE}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.8M12 17h.01" />
+    </svg>
+  )
+}
+
+export function FlecheGauche({ taille = 18, className }: Props) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 24 24" strokeWidth={2.6} className={`block shrink-0 ${className ?? ''}`} {...BASE}>
+      <path d="M19 12H5M11 6l-6 6 6 6" />
+    </svg>
+  )
+}
+
+export function Ecran({ taille = 24, className }: Props) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 24 24" strokeWidth={2.2} className={`block shrink-0 ${className ?? ''}`} {...BASE}>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16v4" />
+    </svg>
+  )
+}

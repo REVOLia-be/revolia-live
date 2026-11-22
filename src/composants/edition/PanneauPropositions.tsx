@@ -66,6 +66,7 @@ function versEdition(p: Proposition): QuestionEdition {
     explication: p.explication ?? '',
     image: null,
     imagesChoix: null,
+    etapes: [],
   }
 }
 

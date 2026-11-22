@@ -11,6 +11,7 @@ import ConsentementOAuth from './pages/ConsentementOAuth'
 import EditionQuiz from './pages/EditionQuiz'
 import Admin from './pages/Admin'
 import Presenter from './pages/Presenter'
+import SuiviAtelier from './pages/SuiviAtelier'
 import PageIntrouvable from './pages/PageIntrouvable'
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/admin" element={<Admin />} />
       <Route path="/formateur/quiz/:id" element={<EditionQuiz />} />
       <Route path="/presenter/:sessionId" element={<Presenter />} />
+      <Route path="/presenter/:sessionId/suivi" element={<SuiviAtelier />} />
       <Route path="*" element={<PageIntrouvable />} />
     </Routes>
   )

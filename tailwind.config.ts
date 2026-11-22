@@ -13,6 +13,7 @@ export default {
         blanc: 'var(--couleur-blanc)',
         discret: 'var(--couleur-discret)',
         inactif: 'var(--couleur-inactif)',
+        doux: 'var(--couleur-doux)',
       },
       fontFamily: {
         titre: 'var(--police-titre)',
