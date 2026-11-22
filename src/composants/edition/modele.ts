@@ -106,6 +106,42 @@ export function convertirQcm(q: QuestionEdition, vers: 'qcm' | 'qcm_multiple'): 
   return { ...q, type: vers, bonne: premiere ?? null, bonnes: [] }
 }
 
+// Applique une permutation aux propositions : `ordre[k]` = ancien indice de la proposition qui passe en position k.
+// La/les bonne(s) réponse(s) suivent leur proposition (indices recalculés).
+function reordonner(q: QuestionEdition, ordre: number[]): QuestionEdition {
+  const nouvelIndice = new Map<number, number>()
+  ordre.forEach((ancien, k) => nouvelIndice.set(ancien, k))
+  return {
+    ...q,
+    choix: ordre.map((ancien) => q.choix[ancien]),
+    bonne: q.bonne !== null && nouvelIndice.has(q.bonne) ? (nouvelIndice.get(q.bonne) as number) : q.bonne,
+    bonnes: q.bonnes.map((b) => nouvelIndice.get(b) ?? b).sort((a, b) => a - b),
+  }
+}
+
+// Déplace la proposition `de` vers la position `vers` (les autres se décalent).
+export function deplacerProposition(q: QuestionEdition, de: number, vers: number): QuestionEdition {
+  const n = q.choix.length
+  if (de === vers || de < 0 || vers < 0 || de >= n || vers >= n) return q
+  const ordre = q.choix.map((_, i) => i)
+  const [pris] = ordre.splice(de, 1)
+  ordre.splice(vers, 0, pris)
+  return reordonner(q, ordre)
+}
+
+// Mélange Fisher-Yates ; avec au moins 2 propositions, l'ordre change toujours.
+export function melangerPropositions(q: QuestionEdition, aleatoire: () => number = Math.random): QuestionEdition {
+  const n = q.choix.length
+  if (n < 2) return q
+  const ordre = q.choix.map((_, i) => i)
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.min(i, Math.floor(aleatoire() * (i + 1)))
+    ;[ordre[i], ordre[j]] = [ordre[j], ordre[i]]
+  }
+  if (ordre.every((v, i) => v === i)) ordre.push(ordre.shift() as number) // identité : rotation d'un cran
+  return reordonner(q, ordre)
+}
+
 // Ligne de la table `questions` telle que lue en base.
 export interface LigneQuestion {
   id: string

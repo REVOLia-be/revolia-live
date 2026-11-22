@@ -1,6 +1,8 @@
 import Carte from '../Carte'
 import {
   convertirQcm,
+  deplacerProposition,
+  melangerPropositions,
   estQcm,
   DUREES,
   LIMITES,
@@ -12,7 +14,9 @@ import {
 const CHAMP =
   'w-full rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg text-vertFonce placeholder:text-discret'
 const PETIT_BOUTON =
-  'min-h-[40px] rounded-pilule border-2 border-vert bg-blanc px-4 text-base font-semibold text-vert transition-colors hover:bg-vert hover:text-blanc disabled:opacity-40 disabled:hover:bg-blanc disabled:hover:text-vert'
+  'min-h-[44px] rounded-pilule border-2 border-vert bg-blanc px-4 text-base font-semibold text-vert transition-colors hover:bg-vert hover:text-blanc disabled:opacity-40 disabled:hover:bg-blanc disabled:hover:text-vert'
+
+const BOUTON_FLECHE = PETIT_BOUTON.replace('px-4', 'w-11 px-0 text-xl')
 
 function Message({ texte }: { texte?: string }) {
   if (!texte) return null
@@ -160,6 +164,26 @@ export default function EditeurQuestion({
                   placeholder={`Proposition ${i + 1}`}
                   aria-label={`Proposition ${i + 1}`}
                 />
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    className={BOUTON_FLECHE}
+                    onClick={() => onChange(deplacerProposition(question, i, i - 1))}
+                    disabled={i === 0}
+                    aria-label={`Monter la proposition ${String.fromCharCode(65 + i)}`}
+                  >
+                    <span aria-hidden>↑</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={BOUTON_FLECHE}
+                    onClick={() => onChange(deplacerProposition(question, i, i + 1))}
+                    disabled={i === question.choix.length - 1}
+                    aria-label={`Descendre la proposition ${String.fromCharCode(65 + i)}`}
+                  >
+                    <span aria-hidden>↓</span>
+                  </button>
+                </div>
                 <button
                   type="button"
                   className={PETIT_BOUTON}
@@ -202,7 +226,10 @@ export default function EditeurQuestion({
               </p>
             </div>
           )}
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" className={PETIT_BOUTON} onClick={() => onChange(melangerPropositions(question))} disabled={question.choix.length < 2}>
+              Mélanger les propositions
+            </button>
             <button type="button" className={PETIT_BOUTON} onClick={ajouterChoix} disabled={question.choix.length >= LIMITES.choixMax}>
               + Ajouter une proposition
             </button>
