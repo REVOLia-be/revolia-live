@@ -42,6 +42,7 @@ insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse
   ('10000000-0000-0000-0000-000000000001', 5, 'echelle', 'Q5', null, null, 30),
   ('10000000-0000-0000-0000-000000000001', 6, 'qcm',     'Q6', '{A,B}',   1, 30),
   ('10000000-0000-0000-0000-000000000001', 7, 'qcm',     'Q7', '{A,B}',   1, 30);
+update public.questions set explication = 'Parce que B.' where ordre = 1;
 select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse)
   values ('10000000-0000-0000-0000-000000000001', 8, 'qcm', 'X', '{A,B}', 5)$$, 'qcm_coherent');
 select set_config('test.session', (public.lancer_session('10000000-0000-0000-0000-000000000001', true, '{Table 1,Table 2}')->>'session_id'), false);
@@ -134,6 +135,7 @@ set role authenticated;
 select test.verifier((public.etat_session(current_setting('test.session')::uuid)->'resultats'->>'est_correcte')::boolean, 'A voit sa bonne réponse après fermeture');
 select test.verifier((public.resultats_question(current_setting('test.q1')::uuid)->>'ma_contribution')::int = 2, 'contribution QCM juste = 2');
 select test.verifier(public.resultats_question(current_setting('test.q1')::uuid)->'repartition' = '[0,1,0]', 'répartition QCM');
+select test.verifier(public.resultats_question(current_setting('test.q1')::uuid)->>'explication' = 'Parce que B.', 'explication révélée après fermeture');
 reset role;
 
 -- ===== Questions 2 à 7 (B : faux au début, juste à la fin → progression) =====
