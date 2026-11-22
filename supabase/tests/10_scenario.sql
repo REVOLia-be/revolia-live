@@ -43,16 +43,16 @@ insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse
   ('10000000-0000-0000-0000-000000000001', 6, 'qcm',     'Q6', '{A,B}',   1, 30),
   ('10000000-0000-0000-0000-000000000001', 7, 'qcm',     'Q7', '{A,B}',   1, 30);
 update public.questions set explication = 'Parce que B.' where ordre = 1;
-update public.quiz set paliers = '{0.3,0.6}';
-select test.doit_echouer($$update public.quiz set paliers = '{0.6,0.3}'$$, 'quiz_paliers_valides');
-select test.doit_echouer($$update public.quiz set paliers = '{0.2,0.4,0.6,0.7,0.8,0.9}'$$, 'quiz_paliers_valides');
+update public.quiz set celebrations = '[{"apres_question": 1, "message": "Premier pas, bravo la salle !"}]';
+select test.doit_echouer($$update public.quiz set celebrations = '[{"apres_question": 1, "message": "a"}, {"apres_question": 1, "message": "b"}]'$$, 'quiz_celebrations_valides');
+select test.doit_echouer($$update public.quiz set celebrations = '[{"apres_question": 0, "message": "a"}]'$$, 'quiz_celebrations_valides');
 select test.doit_echouer($$insert into public.questions (quiz_id, ordre, type, enonce, choix, bonne_reponse)
   values ('10000000-0000-0000-0000-000000000001', 8, 'qcm', 'X', '{A,B}', 5)$$, 'qcm_coherent');
 select set_config('test.session', (public.lancer_session('10000000-0000-0000-0000-000000000001', true, '{Table 1,Table 2}')->>'session_id'), false);
 select set_config('test.code', (select code from public.sessions where id = current_setting('test.session')::uuid), false);
 select set_config('test.table1', (select id::text from public.tables_salle where ordre = 1), false);
 select test.verifier((select count(*) from public.questions_session) = 7, 'questions copiées à la session');
-select test.verifier((select paliers from public.sessions) = '{0.3,0.6}', 'paliers du quiz copiés dans la session');
+select test.verifier(jsonb_array_length((select celebrations from public.sessions)) = 1, 'célébrations du quiz copiées dans la session');
 reset role;
 
 -- ===== Intrus (connecté mais pas formateur) =====
@@ -140,6 +140,7 @@ select test.verifier((public.etat_session(current_setting('test.session')::uuid)
 select test.verifier((public.resultats_question(current_setting('test.q1')::uuid)->>'ma_contribution')::int = 2, 'contribution QCM juste = 2');
 select test.verifier(public.resultats_question(current_setting('test.q1')::uuid)->'repartition' = '[0,1,0]', 'répartition QCM');
 select test.verifier(public.resultats_question(current_setting('test.q1')::uuid)->>'explication' = 'Parce que B.', 'explication révélée après fermeture');
+select test.verifier(public.etat_session(current_setting('test.session')::uuid)->>'celebration' = 'Premier pas, bravo la salle !', 'célébration affichée après la question 1');
 reset role;
 
 -- ===== Questions 2 à 7 (B : faux au début, juste à la fin → progression) =====
