@@ -16,6 +16,7 @@ select public.fermer_question(current_setting('test.s2')::uuid);
 select test.verifier(public.etat_session(current_setting('test.s2')::uuid)->'resultats'->'ma_reponse' is null, 'vue formateur par défaut : pas de ma_reponse');
 select test.verifier((public.etat_session(current_setting('test.s2')::uuid, 'participant')->'resultats'->>'ma_reponse') = '0', 'vue participant : sa réponse est renvoyée');
 select test.verifier((public.etat_session(current_setting('test.s2')::uuid, 'participant')->'resultats'->>'est_correcte')::boolean, 'vue participant : juste');
+select test.verifier(public.etat_session(current_setting('test.s2')::uuid)->>'celebration' = 'Bravo à toute la salle !', 'célébration automatique à 100 % de réussite');
 reset role;
 -- Un connecté sans fiche participant ne gagne rien avec la vue participant
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ff', false);
