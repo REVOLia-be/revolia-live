@@ -48,3 +48,35 @@ Les formateurs ne voient ni ne modifient ces réglages. Tout est **désactivé p
 - Nouvel onglet « Rapport & suivi » : interrupteurs généraux (rapport, newsletter), URL de confidentialité, éditeur des liens par défaut (ajouter/retirer/réordonner, aperçu de la carte), état de configuration de l'envoi (« Envoi d'emails configuré : oui/non » — via une RPC qui indique seulement si les secrets existent côté fonction, sans les révéler).
 - Onglet « Formateurs » : colonne « Rapport autorisé » (interrupteur).
 - Onglet « Tous les quiz » : action « Rapport & liens » par quiz : rapport (hérité/activé/désactivé), newsletter (idem), liens propres (case « Utiliser des liens propres à ce quiz » + éditeur ; sinon affichage des liens généraux hérités), aperçu du bloc « Prochaines étapes » tel que le participant le verra.
+
+## Contrat précis (base ↔ interface ↔ fonctions Edge)
+
+Migration : `supabase/migrations/20261124000021_rapport_email.sql` ; tests : `supabase/tests/70_rapport_email.sql`.
+
+### Participant (authenticated, `participe_a`)
+- `etat_session(p_session, p_vue)` : quand `etat ∈ {bilan, terminee}` et vue participant, ajoute `rapport: { propose: bool, newsletter_proposee: bool, url_confidentialite: text|null, deja_demande: bool, email_masque: text|null }` (email masqué ex. `j***@revolia.be`). Absent sinon.
+- `demander_rapport(p_session uuid, p_email text) → json { demande_id uuid }`. Erreurs (phrases prêtes à afficher) : non participant ; session pas en bilan/terminée (« Le rapport sera disponible à la fin du quiz. ») ; rapport non proposé (« Le rapport par email n'est pas disponible pour ce quiz. ») ; email invalide (« Cette adresse email ne semble pas valide. Vérifie-la et réessaie. ») ; `nb_envois` ≥ 3 (« Tu as déjà demandé ton rapport plusieurs fois. Regarde dans ta boîte mail (et dans les indésirables). »). Une seule ligne par participant (upsert : nouvel email remplace l'ancien, nouveaux jetons NON régénérés, `nb_envois` incrémenté).
+
+### Anonyme (anon + authenticated)
+- `rapport_par_jeton(p_jeton uuid) → json` ou erreur « Ce rapport n'existe plus. Les rapports sont conservés 90 jours. » :
+  `{ quiz_titre, date (sessions.cree_le), formateur_nom (formateurs.nom ou null), pseudo (du participant LUI-MÊME), questions: [ { ordre, type, enonce, image_url|null, choix|null, images_choix|null, mes_reponses: [texte ou indice selon type, rendu lisible côté client], bonnes_reponses: [indices]|null (uniquement si question fermée/posée et QCM), explication|null, etapes: [ {titre, mon_rendu|null} ]|null (atelier) } ] (seulement les questions effectivement posées, dans l'ordre), liens_suivi: [...], newsletter_proposee: bool, jeton_newsletter: uuid|null (seulement si newsletter proposée et pas encore confirmée), newsletter_confirmee: bool, url_confidentialite }`.
+  Jamais de pseudo ni de réponse d'un autre participant, jamais de solution d'une question non posée.
+
+### Interne (service_role uniquement — revoke public/anon/authenticated)
+- `rapport_pour_envoi(p_demande uuid, p_utilisateur uuid) → json` : vérifie que la demande appartient au participant dont `auth_id = p_utilisateur` ; renvoie `{ email, jeton_rapport, quiz_titre, date, formateur_nom, pseudo, nb_questions, nb_bonnes (QCM), liens_suivi, newsletter_proposee, jeton_newsletter|null, url_confidentialite }`.
+- `rapport_marquer_envoye(p_demande uuid)`.
+- `newsletter_confirmer(p_jeton uuid) → json { email, deja_confirmee bool }` ou erreur « Ce lien n'est plus valide. » (newsletter doit être proposée) ; marque `newsletter_confirmee_le` (usage unique : 2e appel → `deja_confirmee = true`, pas de nouvelle création Circle).
+- `rapport_config_envoi()` n'existe PAS en SQL : l'état « Envoi configuré » est renvoyé par la fonction Edge `rapport-email` sur requête `GET ?etat=1` par un admin (`{ resend: bool, circle: bool }`).
+
+### Admin (authenticated + `est_admin()`, sinon « Réservé à l'administration. »)
+- `admin_lire_parametres() → json { rapport_actif, newsletter_active, liens_suivi, url_confidentialite }`
+- `admin_modifier_parametres(p_rapport_actif bool, p_newsletter_active bool, p_liens jsonb, p_url_confidentialite text)` (validation du format des liens : erreurs en français).
+- `admin_lire_reglages_quiz(p_quiz uuid) → json { rapport, newsletter, liens_suivi (null = hérite), liens_generaux }`
+- `admin_modifier_reglages_quiz(p_quiz uuid, p_rapport text, p_newsletter text, p_liens jsonb)` (p_liens null = hérite).
+- `admin_autoriser_rapport_formateur(p_formateur uuid, p_autorise bool)`.
+- `admin_liste_formateurs` : ajoute `rapport_autorise`.
+
+### Fonctions Edge
+- `rapport-email` (verify_jwt true) : `POST { demande_id }` → lit l'utilisateur via le JWT, appelle `rapport_pour_envoi` avec la clé service_role (côté serveur uniquement), envoie via Resend (`RESEND_API_KEY`, `RAPPORT_EXPEDITEUR`, ex. `REVOLia <quiz@mail.revolia.be>`), puis `rapport_marquer_envoye`. Si les secrets manquent : 503 + message « L'envoi d'emails n'est pas encore configuré. Ton rapport reste disponible ici : <lien> » (le téléphone affiche alors le lien direct vers la page du rapport — le jeton vient de la réponse). Réponse succès : `{ ok: true, url_rapport }`. `GET ?etat=1` (admin) : `{ resend, circle }`.
+- `newsletter-confirmer` (verify_jwt false) : `POST { jeton }` → `newsletter_confirmer` puis Circle Admin API v2 (`CIRCLE_API_TOKEN`, `CIRCLE_TAG_NEWSLETTER_ID` facultatif). Si Circle non configuré : on enregistre quand même la confirmation et on répond `{ ok: true }` (l'admin pourra exporter). Réponses : `{ ok: true, deja: bool }`.
+- Email : HTML en tableaux + styles en ligne (charte, Poppins avec repli Arial), version texte, sujet « Ton rapport — <titre du quiz> ». Texte sous le bouton newsletter : « Un seul clic suffit. Tu pourras te désinscrire à tout moment. »
