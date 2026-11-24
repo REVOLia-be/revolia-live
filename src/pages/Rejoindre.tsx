@@ -1,11 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import { appelerRpc } from '../lib/api'
 import { assurerConnexionAnonyme } from '../lib/auth'
-import { messageErreur } from '../lib/erreurs'
-import { lireSalle, memoriserSalle } from '../lib/memoire'
+import EcranPasCommence, { estPasEncoreCommence } from '../composants/EcranPasCommence'
+import { codeErreur, messageErreur } from '../lib/erreurs'
+import { lireSalle, memoriserSalle, oublierSalle } from '../lib/memoire'
 
 interface InfosSession {
   session_id: string
@@ -19,7 +20,10 @@ export default function Rejoindre() {
   const navigate = useNavigate()
   const [infos, setInfos] = useState<InfosSession | null>(null)
   const [erreurChargement, setErreurChargement] = useState<string | null>(null)
-  const [pseudo, setPseudo] = useState(() => lireSalle(code)?.pseudo ?? '')
+  const [pasCommence, setPasCommence] = useState(false) // le quiz existe mais n'a pas encore été lancé
+  const [essai, setEssai] = useState(0)
+  const reessayer = useCallback(() => setEssai((n) => n + 1), [])
+  const [pseudo, setPseudo] = useState('')
   const [tableId, setTableId] = useState<string | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState(false)
@@ -30,15 +34,27 @@ export default function Rejoindre() {
       try {
         await assurerConnexionAnonyme()
         const donnees = await appelerRpc<InfosSession>('infos_session', { p_code: code })
-        if (actif) setInfos(donnees)
+        if (!actif) return
+        // Le code vise toujours la session ACTUELLE : si on avait mémorisé une ancienne session, on l'oublie (nouveau pseudo).
+        const memorisee = lireSalle(code)
+        if (memorisee && memorisee.sessionId !== donnees.session_id) oublierSalle(code)
+        setPasCommence(false)
+        setErreurChargement(null)
+        if (memorisee && memorisee.sessionId === donnees.session_id) setPseudo((p) => p || memorisee.pseudo)
+        setInfos(donnees)
       } catch (e) {
-        if (actif) setErreurChargement(messageErreur(e))
+        if (!actif) return
+        if (estPasEncoreCommence(codeErreur(e))) setPasCommence(true)
+        else {
+          setPasCommence(false)
+          setErreurChargement(messageErreur(e))
+        }
       }
     })()
     return () => {
       actif = false
     }
-  }, [code])
+  }, [code, essai])
 
   async function valider(e: FormEvent) {
     e.preventDefault()
@@ -58,6 +74,8 @@ export default function Rejoindre() {
       setEnvoi(false)
     }
   }
+
+  if (pasCommence) return <EcranPasCommence onReessayer={reessayer} />
 
   if (erreurChargement) {
     return (

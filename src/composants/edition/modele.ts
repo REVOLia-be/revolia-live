@@ -27,7 +27,15 @@ export const LIMITES = {
   libelleEchelle: 40,
   choixMin: 2,
   choixMax: 6,
+  maxReponses: 10,
 }
+
+// --- Code permanent du quiz (voir docs/SPEC-CODE-PERMANENT-REPONSES-MULTIPLES.md) ---
+export const CODE_MIN = 4
+export const CODE_MAX = 10
+/** Saisie du code : insensible à la casse, espaces retirés, seuls A-Z et 0-9 sont gardés. */
+export const normaliserCode = (brut: string) => brut.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_MAX)
+export const codeValide = (code: string) => /^[A-Z0-9]{4,10}$/.test(code)
 
 export interface QuestionEdition {
   id: string // identifiant (généré côté écran, conservé tel quel en base)
@@ -41,6 +49,8 @@ export interface QuestionEdition {
   libelleMax: string
   duree: number
   explication: string // « Pourquoi ? » facultatif, affiché après la fermeture de la question
+  /** Question ouverte : nombre de réponses que chaque participant peut envoyer (1 à 10). */
+  maxReponses: number
   image: string | null // chemin de la photo de la question dans le stockage (facultatif)
   // « Propositions en photos » (QCM) : null = option désactivée ; sinon une entrée par proposition, '' = photo pas encore ajoutée.
   // Toujours de la même longueur que `choix` et dans le même ordre.
@@ -166,6 +176,8 @@ export function validerCelebrations(c: CelebrationEdition[]): string | undefined
 export interface QuizEdition {
   titre: string
   description: string
+  /** Code permanent du quiz (majuscules et chiffres). Vide seulement si la base n'en a pas encore donné. */
+  code: string
   celebrations: CelebrationEdition[]
   questions: QuestionEdition[]
 }
@@ -185,6 +197,7 @@ export function nouvelleQuestion(type: TypeQuestion): QuestionEdition {
     libelleMax: '',
     duree: 30,
     explication: '',
+    maxReponses: 1,
     image: null,
     imagesChoix: null,
     etapes: type === 'atelier' ? [nouvelleEtape()] : [],
@@ -294,6 +307,7 @@ export interface LigneQuestion {
   libelle_max: string | null
   duree_secondes: number
   explication: string | null
+  max_reponses?: number | null
   image_question?: string | null
   images_choix?: string[] | null
 }
@@ -311,6 +325,7 @@ export function depuisLigne(l: LigneQuestion, etapes: EtapeEdition[] = []): Ques
     libelleMax: l.libelle_max ?? '',
     duree: l.duree_secondes,
     explication: l.explication ?? '',
+    maxReponses: l.max_reponses ?? 1,
     image: l.image_question ?? null,
     imagesChoix: l.images_choix ?? null,
     etapes,
@@ -336,6 +351,7 @@ export function versLigne(q: QuestionEdition, quizId: string, ordre: number) {
     libelle_max: echelle && q.libelleMax.trim() ? q.libelleMax.trim() : null,
     duree_secondes: q.duree,
     explication: q.explication.trim() ? q.explication.trim() : null,
+    max_reponses: q.type === 'ouverte' ? q.maxReponses : 1,
     image_question: atelier ? null : q.image || null,
     images_choix: qcm && q.imagesChoix ? q.imagesChoix.map((c) => c.trim()) : null,
   }
@@ -347,6 +363,7 @@ export interface ErreursQuestion {
   bonne?: string
   libelles?: string
   explication?: string
+  maxReponses?: string
   photosChoix?: string
   /** Atelier : au moins une étape. */
   etapes?: string
@@ -395,6 +412,9 @@ export function validerQuestion(q: QuestionEdition): ErreursQuestion {
       e.libelles = `Les libellés sont limités à ${LIMITES.libelleEchelle} caractères.`
     }
   }
+  if (q.type === 'ouverte' && (!Number.isInteger(q.maxReponses) || q.maxReponses < 1 || q.maxReponses > LIMITES.maxReponses)) {
+    e.maxReponses = `Le nombre de réponses par participant va de 1 à ${LIMITES.maxReponses}.`
+  }
   if (q.explication.trim().length > LIMITES.explication) {
     e.explication = `Le « Pourquoi ? » est trop long (${LIMITES.explication} caractères maximum).`
   }
@@ -405,9 +425,14 @@ export function aErreur(e: ErreursQuestion): boolean {
   return Object.keys(e).length > 0
 }
 
-export function validerQuiz(quiz: QuizEdition): { titre?: string; description?: string; celebrations?: string; questions: ErreursQuestion[]; ok: boolean } {
+export function validerCode(code: string): string | undefined {
+  if (!codeValide(code)) return `Le code doit faire ${CODE_MIN} à ${CODE_MAX} caractères : des lettres sans accent et des chiffres.`
+  return undefined
+}
+
+export function validerQuiz(quiz: QuizEdition): { titre?: string; description?: string; code?: string; celebrations?: string; questions: ErreursQuestion[]; ok: boolean } {
   const titre = quiz.titre.trim()
-  const r: { titre?: string; description?: string; celebrations?: string; questions: ErreursQuestion[]; ok: boolean } = {
+  const r: { titre?: string; description?: string; code?: string; celebrations?: string; questions: ErreursQuestion[]; ok: boolean } = {
     questions: quiz.questions.map(validerQuestion),
     ok: true,
   }
@@ -416,7 +441,8 @@ export function validerQuiz(quiz: QuizEdition): { titre?: string; description?: 
   if (quiz.description.trim().length > LIMITES.description) {
     r.description = `La description est trop longue (${LIMITES.description} caractères maximum).`
   }
+  if (quiz.code !== '') r.code = validerCode(quiz.code)
   r.celebrations = validerCelebrations(quiz.celebrations)
-  r.ok = !r.titre && !r.description && !r.celebrations && !r.questions.some(aErreur)
+  r.ok = !r.titre && !r.description && !r.code && !r.celebrations && !r.questions.some(aErreur)
   return r
 }

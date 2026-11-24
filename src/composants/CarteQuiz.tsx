@@ -14,6 +14,7 @@ export interface DonneesCarteQuiz {
   types: string[] // types présents, dans l'ordre de première apparition
   image: string | null // chemin de la première photo dans le bucket « quiz-images »
   modifie_le: string | null
+  code?: string | null // code permanent du quiz
 }
 
 interface QuestionResumee {
@@ -129,6 +130,12 @@ export default function CarteQuiz({
             </span>
           ))}
         </div>
+
+        {quiz.code && (
+          <p className="text-sm">
+            Code <span data-testid="code-carte" className="font-bold tracking-widest text-vertFonce">{quiz.code}</span>
+          </p>
+        )}
 
         <p className="text-sm">
           {auteur && <>Auteur : {auteur}<br /></>}

@@ -101,7 +101,7 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
   const charger = useCallback(async () => {
     const { data, error } = await supabase
       .from('quiz')
-      .select('id, titre, description, modifie_le, cree_le, questions(type, image_question, ordre)')
+      .select('id, titre, description, code, modifie_le, cree_le, questions(type, image_question, ordre)')
       .eq('formateur_id', formateurId) // un admin voit tous les quiz : ici, seulement les siens
       .order('cree_le', { ascending: false })
     if (error) {
@@ -115,6 +115,7 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
           id: string
           titre: string
           description: string | null
+          code?: string | null
           modifie_le: string | null
           cree_le: string
           questions: { type: string; image_question: string | null; ordre: number }[]
@@ -122,6 +123,7 @@ function ListeQuiz({ formateurId, estAdmin }: { formateurId: string; estAdmin: b
           id: q.id,
           titre: q.titre,
           description: q.description,
+          code: q.code ?? null,
           modifie_le: q.modifie_le ?? q.cree_le,
           ...resumerQuestions(q.questions),
         }),
@@ -315,6 +317,11 @@ function LigneListeQuiz({
         <h2 className="text-2xl">{quiz.titre}</h2>
         <p className="text-base">
           {quiz.nb_questions} question{quiz.nb_questions > 1 ? 's' : ''}
+          {quiz.code && (
+            <>
+              {' · '}Code <span data-testid="code-liste" className="font-bold tracking-widest">{quiz.code}</span>
+            </>
+          )}
         </p>
         {quiz.description && <p className="mt-1 text-base">{quiz.description}</p>}
       </div>

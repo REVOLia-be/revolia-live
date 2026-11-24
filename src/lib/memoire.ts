@@ -28,3 +28,12 @@ export function memoriserSalle(code: string, salle: SalleMemorisee) {
     // idem
   }
 }
+
+// Oublie la salle mémorisée (ancienne session de ce code : le formateur en a lancé une nouvelle).
+export function oublierSalle(code: string) {
+  try {
+    window.localStorage.removeItem(cle(code))
+  } catch {
+    // idem
+  }
+}

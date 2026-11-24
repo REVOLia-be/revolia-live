@@ -6,6 +6,7 @@ import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import EditeurQuestion from '../composants/edition/EditeurQuestion'
 import EditeurAtelier from '../composants/edition/EditeurAtelier'
+import PanneauCode from '../composants/edition/PanneauCode'
 import PanneauCelebrations from '../composants/edition/PanneauCelebrations'
 import PanneauLancement from '../composants/edition/PanneauLancement'
 import PanneauPropositions from '../composants/edition/PanneauPropositions'
@@ -30,7 +31,7 @@ import {
   type TypeQuestion,
 } from '../composants/edition/modele'
 import { useFormateur } from '../lib/auth'
-import { messageErreur } from '../lib/erreurs'
+import { codeErreur, messageErreur } from '../lib/erreurs'
 import { dupliquerQuiz } from '../lib/quiz'
 import { photosEnregistrees } from '../lib/photos'
 import { supabase } from '../lib/supabase'
@@ -85,6 +86,8 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
   const [chargement, setChargement] = useState<'en_cours' | 'ok' | 'absent' | 'erreur'>('en_cours')
   const [erreurChargement, setErreurChargement] = useState<string | null>(null)
   const [erreurSauvegarde, setErreurSauvegarde] = useState<string | null>(null)
+  const [codeEnBase, setCodeEnBase] = useState('') // code enregistré : celui que le QR code ouvre
+  const [erreurCode, setErreurCode] = useState<string | undefined>(undefined)
   const [enregistrement, setEnregistrement] = useState(false)
   const [afficherErreurs, setAfficherErreurs] = useState(false)
   const [typeAjout, setTypeAjout] = useState<TypeQuestion>('qcm')
@@ -100,7 +103,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
     setChargement('en_cours')
     const { data: q, error } = await supabase
       .from('quiz')
-      .select('id, titre, description, celebrations, formateur_id')
+      .select('id, titre, description, code, celebrations, formateur_id')
       .eq('id', quizId)
       .maybeSingle()
     if (error) {
@@ -121,7 +124,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
     }
     const { data: lignes, error: erreurQ } = await supabase
       .from('questions')
-      .select('id, ordre, type, enonce, choix, bonne_reponse, bonnes_reponses, annoncer_nombre, libelle_min, libelle_max, duree_secondes, explication, image_question, images_choix')
+      .select('id, ordre, type, enonce, choix, bonne_reponse, bonnes_reponses, annoncer_nombre, libelle_min, libelle_max, duree_secondes, explication, max_reponses, image_question, images_choix')
       .eq('quiz_id', quizId)
       .order('ordre')
     if (erreurQ) {
@@ -149,12 +152,15 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
     const charge: QuizEdition = {
       titre: q.titre,
       description: q.description ?? '',
+      code: (q.code as string | null) ?? '',
       celebrations: celebrationsDepuisBase(q.celebrations),
       questions: lignesQ.map((l) => depuisLigne(l, (parAtelier.get(l.id) ?? []).map(etapeDepuisLigne))),
     }
     idsEtapesEnBase.current = new Set([...parAtelier.values()].flat().map((e) => e.id))
     idsEnBase.current = new Set(charge.questions.map((x) => x.id))
     setQuiz(charge)
+    setCodeEnBase(charge.code)
+    setErreurCode(undefined)
     setReference(instantane(charge))
     setChargement('ok')
   }, [quizId, moi])
@@ -242,6 +248,7 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
   async function enregistrer() {
     setAfficherErreurs(true)
     setErreurSauvegarde(null)
+    setErreurCode(undefined)
     if (!valid.ok) {
       setErreurSauvegarde('Quelques points sont à corriger avant d\'enregistrer. Ils sont signalés en dessous.')
       return
@@ -254,11 +261,22 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
         .update({
           titre: aEnregistrer.titre.trim(),
           description: aEnregistrer.description.trim() || null,
+          ...(aEnregistrer.code ? { code: aEnregistrer.code } : {}),
           celebrations: celebrationsVersBase(aEnregistrer.celebrations),
           modifie_le: new Date().toISOString(),
         })
         .eq('id', quizId)
-      if (e1) throw e1
+      if (e1) {
+        if (codeErreur(e1) === '23505' || /code/i.test(e1.message ?? '')) {
+          // Code déjà pris par un autre quiz : message de la base s'il est lisible, sinon celui de la spécification.
+          const msg = (e1.message ?? '').trim()
+          setErreurCode(msg && !/duplicate|violates|unique/i.test(msg) ? msg : 'Ce code est déjà utilisé par un autre quiz. Choisis-en un autre.')
+          setErreurSauvegarde('Le code choisi n\'est pas disponible. Change-le (bloc « Code permanent »), puis enregistre à nouveau.')
+          return
+        }
+        throw e1
+      }
+      setCodeEnBase(aEnregistrer.code || codeEnBase)
 
       // Questions retirées : supprimées d'abord, pour libérer leur numéro d'ordre
       // (la contrainte d'unicité ne vérifie qu'à la fin de chaque requête).
@@ -383,6 +401,16 @@ function Editeur({ quizId, moi }: { quizId: string; moi: string }) {
           )}
         </div>
       </Carte>
+
+      <PanneauCode
+        codeEnBase={codeEnBase}
+        saisie={courant.code}
+        onChange={(code) => {
+          setErreurCode(undefined)
+          changer({ code })
+        }}
+        erreur={erreurCode ?? (afficherErreurs ? valid.code : undefined)}
+      />
 
       <PanneauCelebrations
         celebrations={courant.celebrations}

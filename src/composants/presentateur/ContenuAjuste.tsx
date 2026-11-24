@@ -35,7 +35,9 @@ function deborde(zone: HTMLElement, contenu: HTMLElement): boolean {
   const blocs = contenu.querySelectorAll<HTMLElement>('*')
   for (let i = 0; i < blocs.length; i++) {
     const b = blocs[i]
-    if (b.classList.contains('sr-only')) continue // texte réservé aux lecteurs d'écran : boîte de 1 px, sans effet visible
+    if (b.classList.contains('sr-only')) continue
+    // Zone qui se débrouille seule pour tenir dans sa place (ex. mur de cartes) : elle ne fait jamais réduire le reste.
+    if (b.hasAttribute('data-ignorer-debordement')) continue // texte réservé aux lecteurs d'écran : boîte de 1 px, sans effet visible
     if (b.clientHeight > 0 && b.scrollHeight > b.clientHeight + TOLERANCE_TEXTE) return true
     if (b.clientWidth > 0 && b.scrollWidth > b.clientWidth + TOLERANCE_TEXTE) return true
   }
@@ -114,7 +116,7 @@ export default function ContenuAjuste({ cle, niveaux = 1, plancherEm, plancherPx
   })
 
   return (
-    <div ref={zone} className={`relative overflow-hidden ${className}`}>
+    <div ref={zone} data-zone-ajuste className={`relative overflow-hidden ${className}`}>
       <div ref={contenu} className="flex h-full flex-col gap-[2vh]">
         {children(niveau)}
       </div>

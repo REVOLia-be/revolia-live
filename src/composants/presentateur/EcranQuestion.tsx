@@ -10,18 +10,21 @@ interface Props {
   enCours: boolean
   erreur: string | null
   onArreter: () => void
+  /** Question ouverte à réponses multiples : nombre total de réponses reçues (null = pas encore connu). */
+  totalReponses?: number | null
 }
 
 // Part de la largeur donnée à la photo de la question quand elle est à côté des propositions, selon la disposition (0 = la plus aérée).
 const LARGEUR_PHOTO = ['w-[42%]', 'w-[34%]', 'w-[28%]']
 
-export default function EcranQuestion({ etat, secondes, enCours, erreur, onArreter }: Props) {
+export default function EcranQuestion({ etat, secondes, enCours, erreur, onArreter, totalReponses = null }: Props) {
   const question = etat.question!
   const qcm = question.type === 'qcm' || question.type === 'qcm_multiple'
   const image = question.image ?? null
   const imagesChoix = qcm ? question.images_choix ?? null : null
   const aEnonce = question.enonce.trim().length > 0
   const nbChoix = question.choix?.length ?? 0
+  const multiples = question.type === 'ouverte' && (question.max_reponses ?? 1) > 1
 
   return (
     <ZonesEcran
@@ -101,7 +104,7 @@ export default function EcranQuestion({ etat, secondes, enCours, erreur, onArret
                     {' · '}
                   </>
                 ) : null}
-                Réponds sur ton téléphone
+                {multiples ? `Réponds sur ton téléphone (jusqu'à ${question.max_reponses} réponses)` : 'Réponds sur ton téléphone'}
               </p>
             </div>
             <p
@@ -124,7 +127,21 @@ export default function EcranQuestion({ etat, secondes, enCours, erreur, onArret
           )}
 
           <p className="shrink-0 pb-[0.6vh] font-semibold">
-            {question.nb_reponses} / {etat.nb_participants} réponses
+            {multiples ? (
+              <>
+                {question.nb_reponses} personne{question.nb_reponses > 1 ? 's ont' : ' a'} répondu
+                {totalReponses !== null && (
+                  <>
+                    {' · '}
+                    {totalReponses} réponse{totalReponses > 1 ? 's' : ''}
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {question.nb_reponses} / {etat.nb_participants} réponses
+              </>
+            )}
           </p>
             </>
           )

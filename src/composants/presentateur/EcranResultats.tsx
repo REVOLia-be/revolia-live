@@ -189,8 +189,9 @@ export default function EcranResultats({ etat, enCours, erreur, onSuivante, onBi
                 </>
               ) : resultats ? (
                 <div className={`min-h-0 flex-1 ${rangee}`}>
-                  <div className="flex min-w-0 flex-1 flex-col self-stretch">
-                    <div className="my-auto">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col self-stretch">
+                    {/* Le mur de cartes (question ouverte) occupe toute la place restante et s'y ajuste lui-même. */}
+                    <div className={question.type === 'ouverte' ? 'flex min-h-0 flex-1 flex-col' : 'my-auto'}>
                       <ResultatsLibres question={question} resultats={resultats} onAction={onAction} dense={dessous} />
                     </div>
                   </div>
