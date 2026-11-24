@@ -504,11 +504,11 @@ grant execute on function public.admin_lire_parametres(), public.admin_modifier_
   public.admin_lire_reglages_quiz(uuid), public.admin_modifier_reglages_quiz(uuid, text, text, jsonb),
   public.admin_autoriser_rapport_formateur(uuid, boolean) to authenticated;
 
--- admin_liste_formateurs : ajoute rapport_autorise (le type de retour change : on la recrée)
+-- admin_liste_formateurs : ajoute rapport_autorise et nom (le type de retour change : on la recrée)
 drop function public.admin_liste_formateurs();
 create function public.admin_liste_formateurs()
 returns table (id uuid, email text, est_admin boolean, actif boolean, nb_quiz bigint, derniere_session timestamptz,
-               rapport_autorise boolean)
+               rapport_autorise boolean, nom text)
 language plpgsql stable security definer set search_path = '' as $$
 begin
   if not public.est_admin() then
@@ -518,7 +518,8 @@ begin
     select f.id, f.email, f.est_admin, f.actif,
            (select count(*) from public.quiz z where z.formateur_id = f.id),
            (select max(j.cree_le) from public.journal_usage j where j.formateur_id = f.id and j.type = 'session'),
-           f.rapport_autorise
+           f.rapport_autorise,
+           f.nom
     from public.formateurs f
     order by f.actif desc, f.email;
 end $$;
@@ -695,3 +696,27 @@ end $$;
 
 revoke execute on function public.etat_session(uuid, text) from public, anon;
 grant execute on function public.etat_session(uuid, text) to authenticated;
+
+-- -----------------------------------------------------------------------------
+-- admin_nommer_formateur : renseigne le nom affiché dans le rapport (« Animé par … »)
+-- Nom trimé ; vide = aucun nom ; 80 caractères maximum.
+-- -----------------------------------------------------------------------------
+create or replace function public.admin_nommer_formateur(p_formateur uuid, p_nom text)
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare
+  nom_net text := nullif(btrim(coalesce(p_nom, '')), '');
+begin
+  if not public.est_admin() then
+    raise exception 'Réservé à l''administration.' using errcode = '42501';
+  end if;
+  if char_length(coalesce(nom_net, '')) > 80 then
+    raise exception 'Le nom ne doit pas dépasser 80 caractères.' using errcode = '22023';
+  end if;
+  update public.formateurs set nom = nom_net where id = p_formateur;
+  if not found then
+    raise exception 'Ce formateur est introuvable.' using errcode = 'P0002';
+  end if;
+end $$;
+
+revoke execute on function public.admin_nommer_formateur(uuid, text) from public, anon;
+grant execute on function public.admin_nommer_formateur(uuid, text) to authenticated;

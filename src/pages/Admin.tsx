@@ -26,6 +26,8 @@ interface FicheFormateur {
   derniere_session: string | null
   /** Absent tant que la migration du rapport n'est pas appliquée. */
   rapport_autorise?: boolean
+  /** Nom affiché dans les rapports (« Animé par … ») ; absent tant que la migration n'est pas appliquée. */
+  nom?: string | null
 }
 
 interface LigneQuizAdmin extends DonneesCarteQuiz {
@@ -457,6 +459,22 @@ function OngletFormateurs({
     }
   }
 
+  async function enregistrerNom(f: FicheFormateur, nom: string) {
+    if (nom.trim() === (f.nom ?? '')) return
+    setOccupe(true)
+    setErreur(null)
+    setInfo(null)
+    try {
+      await appelerRpc('admin_nommer_formateur', { p_formateur: f.id, p_nom: nom })
+      await recharger()
+      setInfo(nom.trim() ? `Nom enregistré pour ${f.email}.` : `Nom retiré pour ${f.email}.`)
+    } catch (err) {
+      setErreur(messageErreur(err))
+    } finally {
+      setOccupe(false)
+    }
+  }
+
   function phrase(f: FicheFormateur, a: Action): string {
     if (a.type === 'actif') {
       return f.actif
@@ -516,6 +534,22 @@ function OngletFormateurs({
                 session : {dateCourte(f.derniere_session)}
               </p>
             </div>
+            {f.nom !== undefined && (
+              <label className="flex flex-col gap-1 text-base font-semibold">
+                Nom affiché dans les rapports
+                <input
+                  type="text"
+                  key={`${f.id}-${f.nom ?? ''}`}
+                  defaultValue={f.nom ?? ''}
+                  maxLength={80}
+                  placeholder="Prénom Nom"
+                  disabled={occupe}
+                  onBlur={(e) => void enregistrerNom(f, e.target.value)}
+                  className={CHAMP}
+                />
+                <span className="text-sm font-normal">Affiché sous la forme « Animé par … ». Enregistré quand tu quittes le champ.</span>
+              </label>
+            )}
             {f.rapport_autorise !== undefined && (
               <Interrupteur
                 actif={f.rapport_autorise}

@@ -109,6 +109,7 @@ select test.doit_echouer($$select public.admin_modifier_parametres(true, true, '
 select test.doit_echouer($$select public.admin_lire_reglages_quiz('70000000-0000-0000-0000-000000000001')$$, 'Réservé à l''administration');
 select test.doit_echouer($$select public.admin_modifier_reglages_quiz('70000000-0000-0000-0000-000000000001', 'actif', 'actif', null)$$, 'Réservé à l''administration');
 select test.doit_echouer($$select public.admin_autoriser_rapport_formateur('00000000-0000-0000-0000-0000000000f3', false)$$, 'Réservé à l''administration');
+select test.doit_echouer($$select public.admin_nommer_formateur('00000000-0000-0000-0000-0000000000f3', 'Pirate')$$, 'Réservé à l''administration');
 select test.verifier((select count(*) from public.parametres_generaux) = 0, 'un formateur ne lit pas parametres_generaux');
 update public.parametres_generaux set rapport_actif = true;
 select test.verifier((select count(*) from public.reglages_quiz) = 0, 'un formateur ne lit pas reglages_quiz');
@@ -303,6 +304,17 @@ reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000a701', false);
 set role authenticated;
 select test.verifier(public.rapport_par_jeton(current_setting('test.jeton_a')::uuid)->>'pseudo' = 'Alice', 'authenticated peut lire un rapport par jeton');
+reset role;
+
+-- ===== Nom du formateur : l'admin le renseigne, il apparaît dans le rapport =====
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000f', false);
+set role authenticated;
+select public.admin_nommer_formateur('00000000-0000-0000-0000-00000000000f', '  Jean-François  ');
+select test.verifier((select nom from public.admin_liste_formateurs() where id = '00000000-0000-0000-0000-00000000000f') = 'Jean-François', 'admin nomme un formateur (nom trimé, renvoyé par la liste)');
+select test.doit_echouer($$select public.admin_nommer_formateur('00000000-0000-0000-0000-00000000000f', repeat('x', 81))$$, 'ne doit pas dépasser 80');
+reset role;
+set role anon;
+select test.verifier(public.rapport_par_jeton(current_setting('test.jeton_a')::uuid)->>'formateur_nom' = 'Jean-François', 'rapport_par_jeton renvoie formateur_nom');
 reset role;
 
 -- ===== Liens : propres au quiz (remplacent), vides (aucun), hérités =====
