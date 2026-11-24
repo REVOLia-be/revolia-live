@@ -23,3 +23,28 @@ Table `demandes_rapport` : `id`, `session_id` (cascade), `participant_id` (casca
 - Compte Resend ; domaine d'envoi (sous-domaine conseillé, ex. `mail.revolia.be`) ; enregistrements DNS chez one.com (SPF/DKIM) ; clé API → secret Supabase `RESEND_API_KEY`.
 - Circle : jeton API Admin v2 → secret `CIRCLE_API_TOKEN` ; étiquette « Newsletter – REVOLia Live » (créable via l'API).
 - Liens : politique de confidentialité ; liens « Prochaines étapes » (REVOLia Campus + autres).
+
+## Réglages — console d'administration UNIQUEMENT (ajout validé par JF le 24/11/2026)
+
+Les formateurs ne voient ni ne modifient ces réglages. Tout est **désactivé par défaut**.
+
+### Tables (lecture et écriture : admin uniquement, RLS ; les fonctions serveur les lisent en security definer)
+- `parametres_generaux` (une seule ligne, id = 1) : `rapport_actif` bool (défaut false), `newsletter_active` bool (défaut false), `liens_suivi` jsonb (liens par défaut, voir format), `url_confidentialite` text (https), `maj_le`.
+- `formateurs.rapport_autorise` bool défaut true (colonne réglable par l'admin uniquement : via RPC admin, pas par la politique de mise à jour existante — la table formateurs n'est de toute façon pas modifiable par les formateurs).
+- `reglages_quiz` : `quiz_id` (pk, → quiz, cascade), `rapport` text ∈ {'herite','actif','inactif'} défaut 'herite', `newsletter` text même domaine, `liens_suivi` jsonb NULL (NULL = utiliser les liens généraux ; non NULL = les REMPLACE, `[]` = aucun lien), `maj_le`. Pas de ligne = tout hérité.
+- Format `liens_suivi` : `[{ "titre": "Rejoins REVOLia Campus", "texte": "Une phrase qui donne envie", "url": "https://…", "bouton": "Découvrir REVOLia Campus" }]`, 0 à 5 liens, titre ≤ 80, texte ≤ 200, bouton ≤ 40, url https.
+
+### Règles effectives (calculées par le serveur)
+- Rapport proposé = `parametres_generaux.rapport_actif` ET `formateurs.rapport_autorise` (formateur de la session) ET (`reglages_quiz.rapport` ≠ 'inactif') — 'actif' sur un quiz ne contourne PAS un interrupteur général ou formateur éteint (l'admin garde le dernier mot à chaque niveau ; 'herite' et 'actif' sont donc équivalents tant que les niveaux supérieurs sont allumés).
+- Newsletter proposée = rapport proposé ET `parametres_generaux.newsletter_active` ET (`reglages_quiz.newsletter` ≠ 'inactif').
+- Liens = `reglages_quiz.liens_suivi` s'il n'est pas NULL, sinon `parametres_generaux.liens_suivi`.
+- Si la session n'a plus de quiz (quiz supprimé) : réglages généraux + formateur.
+- `etat_session` (vue participant, état bilan/terminée) expose `rapport_propose` (bool) et `url_confidentialite`. `demander_rapport` refuse si non proposé.
+
+### RPC admin (vérifient `est_admin`)
+`admin_lire_parametres()`, `admin_modifier_parametres(...)`, `admin_lire_reglages_quiz(p_quiz)`, `admin_modifier_reglages_quiz(p_quiz, p_rapport, p_newsletter, p_liens)`, `admin_autoriser_rapport_formateur(p_formateur, p_autorise)` ; `admin_liste_formateurs` renvoie aussi `rapport_autorise`.
+
+### Interface admin
+- Nouvel onglet « Rapport & suivi » : interrupteurs généraux (rapport, newsletter), URL de confidentialité, éditeur des liens par défaut (ajouter/retirer/réordonner, aperçu de la carte), état de configuration de l'envoi (« Envoi d'emails configuré : oui/non » — via une RPC qui indique seulement si les secrets existent côté fonction, sans les révéler).
+- Onglet « Formateurs » : colonne « Rapport autorisé » (interrupteur).
+- Onglet « Tous les quiz » : action « Rapport & liens » par quiz : rapport (hérité/activé/désactivé), newsletter (idem), liens propres (case « Utiliser des liens propres à ce quiz » + éditeur ; sinon affichage des liens généraux hérités), aperçu du bloc « Prochaines étapes » tel que le participant le verra.
