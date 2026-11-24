@@ -397,7 +397,7 @@ const INSTRUCTIONS =
   "Tu ne peux pas supprimer un quiz ni lancer une session en direct ; le formateur le fait dans l'application.";
 
 function construireServeur(ctx: Contexte): McpServer {
-  const serveur = new McpServer({ name: 'revolia-live', version: '1.0.0' }, { instructions: INSTRUCTIONS })
+  const serveur = new McpServer({ name: 'revolia-live', version: '1.1.0' }, { instructions: INSTRUCTIONS })
   const lecture = { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
   const ecriture = { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
 
