@@ -183,3 +183,34 @@
 @media (prefers-reduced-motion: reduce) {
   .photo-chargement { animation: none; }
 }
+
+/* Rapport imprimable : les couleurs de fond sont conservées à l'impression, la page est découpée proprement. */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  .rapport, .rapport * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.rapport-icone-fond::after {
+  content: '';
+  position: absolute;
+  right: -60px;
+  bottom: -70px;
+  width: 280px;
+  height: 280px;
+  background: url('/marque/icone-blanc.svg') no-repeat center / contain;
+  opacity: 0.06;
+  pointer-events: none;
+}
+.rapport-icone-haut::after {
+  content: '';
+  position: absolute;
+  right: -120px;
+  top: -60px;
+  width: 420px;
+  height: 420px;
+  background: url('/marque/icone-blanc.svg') no-repeat center / contain;
+  opacity: 0.06;
+  pointer-events: none;
+}
+@keyframes trace-confirmation { to { stroke-dashoffset: 0; } }
+.coche-confirmation { stroke-dasharray: 40; stroke-dashoffset: 40; animation: trace-confirmation 0.7s ease 0.2s forwards; }
+@media (prefers-reduced-motion: reduce) { .coche-confirmation { animation: none; stroke-dashoffset: 0; } }

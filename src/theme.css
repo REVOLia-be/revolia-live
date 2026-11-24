@@ -43,6 +43,16 @@
   /* Fond très doux (8 % de vert sur blanc) pour les cartes de prompt et d'aperçu. Pas du vert clair : celui-ci n'est jamais un fond. */
   --couleur-doux: color-mix(in srgb, var(--couleur-vert) 8%, var(--couleur-blanc));
 
+  /* Rapport et pages publiques (maquettes validées) : fonds et filets très doux, dérivés des couleurs de la charte. */
+  --couleur-fond: color-mix(in srgb, var(--couleur-vert) 5%, var(--couleur-blanc)); /* fond de page du rapport */
+  --couleur-trait: color-mix(in srgb, var(--couleur-vert) 16%, var(--couleur-blanc)); /* filets et bordures douces */
+  --couleur-juste: color-mix(in srgb, var(--couleur-vert) 12%, var(--couleur-blanc)); /* fond d'une bonne réponse */
+  --couleur-sourdine: color-mix(in srgb, var(--couleur-bleu-violet) 65%, var(--couleur-blanc)); /* texte secondaire sur blanc */
+  --couleur-neutre: color-mix(in srgb, var(--couleur-bleu-violet) 7%, var(--couleur-blanc)); /* fond de « ton choix » (jamais rouge) */
+  --couleur-blanc-doux: color-mix(in srgb, var(--couleur-blanc) 82%, var(--couleur-bleu-violet)); /* texte secondaire sur bleu violet */
+  --couleur-voile: color-mix(in srgb, var(--couleur-blanc) 8%, transparent); /* cartes sur bleu violet */
+  --couleur-voile-trait: color-mix(in srgb, var(--couleur-blanc) 18%, transparent);
+
   /* Titres : iBrand (une seule graisse, toujours en font-weight 400), repli Poppins. */
   --police-titre: 'iBrand', 'Poppins', system-ui, sans-serif;
   --police-texte: 'Poppins', system-ui, sans-serif;

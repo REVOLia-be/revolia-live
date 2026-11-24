@@ -12,6 +12,7 @@ import { codeErreur, estErreurReseau, messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
 import { lireSalle, oublierSalle } from '../lib/memoire'
 import { usePrechargement } from '../lib/photos'
+import EncartRapport from '../composants/rapport/EncartRapport'
 import EcranAtelierParticipant from '../composants/atelier/EcranAtelierParticipant'
 import { GrilleChoixPhotos, PhotoQuestion, TuileResultat } from '../composants/PhotosParticipant'
 import { lettre, useEtatSession, type EtatSession, type MonScore, type NomMention } from '../lib/session'
@@ -1013,6 +1014,8 @@ function EcranBilanParticipant({ etat }: { etat: EtatSession }) {
       </section>
 
       {etat.mon_score && <Parcours score={etat.mon_score} />}
+
+      {etat.rapport?.propose && <EncartRapport sessionId={etat.session_id} rapport={etat.rapport} />}
 
       {mes.map((m, i) => (
         <p key={i} className="flex items-center gap-3 text-[17px] font-bold text-vert">

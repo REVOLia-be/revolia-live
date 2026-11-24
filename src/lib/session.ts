@@ -116,6 +116,16 @@ export interface MonScore {
   contribution: number
 }
 
+/** Proposition de rapport par email (état « bilan » ou « terminee », vue participant). */
+export interface EtatRapport {
+  propose: boolean
+  newsletter_proposee: boolean
+  url_confidentialite: string | null
+  deja_demande: boolean
+  /** Ex. « j***@revolia.be » */
+  email_masque: string | null
+}
+
 export interface EtatSession {
   maintenant: string
   session_id: string
@@ -136,6 +146,8 @@ export interface EtatSession {
   celebration?: string | null
   bilan?: Bilan
   mon_score?: MonScore | null // participant seulement (bilan / terminee) ; peut être absent
+  /** Participant, bilan / terminee : rapport par email (absent sinon). */
+  rapport?: EtatRapport
   /** Atelier courant : répartition collective par étape. */
   atelier?: EtatAtelier
   /** Rendu choisi par le formateur pour être projeté. Jamais de pseudo. */

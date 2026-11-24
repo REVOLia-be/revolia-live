@@ -3,12 +3,16 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
 import CarteQuiz, { GrilleQuiz, resumerQuestions, type DonneesCarteQuiz } from '../composants/CarteQuiz'
+import Interrupteur from '../composants/admin/Interrupteur'
+import OngletRapport from '../composants/admin/OngletRapport'
+import PanneauRapportQuiz from '../composants/admin/PanneauRapportQuiz'
 import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import SelecteurVue, { usePreferenceVue } from '../composants/SelecteurVue'
 import { appelerRpc } from '../lib/api'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
+import { autoriserRapportFormateur } from '../lib/rapport'
 import { dupliquerQuiz } from '../lib/quiz'
 import { supabase } from '../lib/supabase'
 import { VueUtilisation, type LigneJournal } from './Utilisation'
@@ -20,6 +24,8 @@ interface FicheFormateur {
   actif: boolean
   nb_quiz: number
   derniere_session: string | null
+  /** Absent tant que la migration du rapport n'est pas appliquée. */
+  rapport_autorise?: boolean
 }
 
 interface LigneQuizAdmin extends DonneesCarteQuiz {
@@ -27,11 +33,12 @@ interface LigneQuizAdmin extends DonneesCarteQuiz {
   cree_le: string
 }
 
-type Onglet = 'quiz' | 'formateurs' | 'utilisation'
+type Onglet = 'quiz' | 'formateurs' | 'rapport' | 'utilisation'
 
 const ONGLETS: { cle: Onglet; libelle: string }[] = [
   { cle: 'quiz', libelle: 'Tous les quiz' },
   { cle: 'formateurs', libelle: 'Formateurs' },
+  { cle: 'rapport', libelle: 'Rapport & suivi' },
   { cle: 'utilisation', libelle: 'Utilisation globale' },
 ]
 
@@ -147,6 +154,7 @@ function Administration({ moi }: { moi: string }) {
       {onglet === 'formateurs' && (
         <OngletFormateurs moi={moi} formateurs={formateurs} recharger={chargerFormateurs} />
       )}
+      {onglet === 'rapport' && <OngletRapport />}
       {onglet === 'utilisation' && <OngletUtilisation auteurs={auteurs} />}
     </main>
   )
@@ -170,6 +178,7 @@ function OngletQuiz({
   const [info, setInfo] = useState<string | null>(null)
   const [occupe, setOccupe] = useState<string | null>(null)
   const [aSupprimer, setASupprimer] = useState<string | null>(null)
+  const [panneauRapport, setPanneauRapport] = useState<string | null>(null)
   const [vue, setVue] = usePreferenceVue('revolia-live:vue-quiz:admin', 'liste')
 
   const charger = useCallback(async () => {
@@ -281,6 +290,13 @@ function OngletQuiz({
         </Carte>
       )}
 
+      {vue === 'cartes' && panneauRapport && (
+        <PanneauRapportQuiz
+          quizId={panneauRapport}
+          titre={quiz?.find((x) => x.id === panneauRapport)?.titre ?? ''}
+          onFermer={() => setPanneauRapport(null)}
+        />
+      )}
       {vue === 'cartes' && visibles.length > 0 && (
         <GrilleQuiz>
           {visibles.map((q) => (
@@ -289,7 +305,10 @@ function OngletQuiz({
               quiz={{ ...q, modifie_le: q.modifie_le ?? q.cree_le }}
               auteur={`${nomAuteur(q)}${q.formateur_id === moi ? ' (toi)' : ''}`}
               action={{ libelle: 'Modifier', onChoisir: () => navigate(`/formateur/quiz/${q.id}`) }}
-              menu={[{ libelle: 'Dupliquer dans mes quiz', onChoisir: () => void dupliquer(q) }]}
+              menu={[
+                { libelle: 'Rapport & liens', onChoisir: () => setPanneauRapport(q.id) },
+                { libelle: 'Dupliquer dans mes quiz', onChoisir: () => void dupliquer(q) },
+              ]}
               occupe={occupe === q.id}
               onSupprimer={() => supprimer(q)}
             />
@@ -327,6 +346,15 @@ function OngletQuiz({
             <Bouton type="button" variante="secondaire" className="sm:w-auto" onClick={() => dupliquer(q)} disabled={occupe === q.id}>
               Dupliquer dans mes quiz
             </Bouton>
+            <Bouton
+              type="button"
+              variante="secondaire"
+              className="sm:w-auto"
+              onClick={() => setPanneauRapport(panneauRapport === q.id ? null : q.id)}
+              aria-expanded={panneauRapport === q.id}
+            >
+              Rapport & liens
+            </Bouton>
             <button
               type="button"
               onClick={() => setASupprimer(q.id)}
@@ -336,6 +364,7 @@ function OngletQuiz({
               Supprimer
             </button>
           </div>
+          {panneauRapport === q.id && <PanneauRapportQuiz quizId={q.id} titre={q.titre} onFermer={() => setPanneauRapport(null)} />}
           {aSupprimer === q.id && (
             <div className="flex flex-col gap-3 rounded-champ border-2 border-vert p-4">
               <p className="text-lg font-semibold">
@@ -414,6 +443,20 @@ function OngletFormateurs({
     }
   }
 
+  async function changerRapport(f: FicheFormateur, autorise: boolean) {
+    setOccupe(true)
+    setErreur(null)
+    setInfo(null)
+    try {
+      await autoriserRapportFormateur(f.id, autorise)
+      await recharger()
+    } catch (err) {
+      setErreur(messageErreur(err))
+    } finally {
+      setOccupe(false)
+    }
+  }
+
   function phrase(f: FicheFormateur, a: Action): string {
     if (a.type === 'actif') {
       return f.actif
@@ -473,6 +516,15 @@ function OngletFormateurs({
                 session : {dateCourte(f.derniere_session)}
               </p>
             </div>
+            {f.rapport_autorise !== undefined && (
+              <Interrupteur
+                actif={f.rapport_autorise}
+                disabled={occupe}
+                libelle="Rapport autorisé"
+                aide="Désactivé, le rapport par email n'est proposé dans aucun quiz de cette personne."
+                onChange={(v) => void changerRapport(f, v)}
+              />
+            )}
             <div className="flex flex-col gap-3 sm:flex-row">
               <Bouton
                 type="button"
