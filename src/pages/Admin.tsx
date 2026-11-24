@@ -175,7 +175,7 @@ function OngletQuiz({
   const charger = useCallback(async () => {
     const { data, error } = await supabase
       .from('quiz')
-      .select('id, titre, description, formateur_id, modifie_le, cree_le, questions(type, image_question, ordre)')
+      .select('id, titre, description, code, formateur_id, modifie_le, cree_le, questions(type, image_question, ordre)')
       .order('modifie_le', { ascending: false, nullsFirst: false })
     if (error) {
       setErreur(messageErreur(error))
@@ -187,6 +187,7 @@ function OngletQuiz({
           id: string
           titre: string
           description: string | null
+          code?: string | null
           formateur_id: string
           modifie_le: string | null
           cree_le: string
@@ -195,6 +196,7 @@ function OngletQuiz({
           id: q.id,
           titre: q.titre,
           description: q.description,
+          code: q.code ?? null,
           formateur_id: q.formateur_id,
           modifie_le: q.modifie_le,
           cree_le: q.cree_le,
@@ -305,6 +307,11 @@ function OngletQuiz({
             </p>
             <p className="text-base">
               {q.nb_questions} question{q.nb_questions > 1 ? 's' : ''} · modifié le {dateCourte(q.modifie_le ?? q.cree_le)}
+              {q.code && (
+                <>
+                  {' · '}Code <span data-testid="code-liste" className="font-bold tracking-widest">{q.code}</span>
+                </>
+              )}
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

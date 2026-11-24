@@ -33,7 +33,10 @@ export interface QuestionCourante {
   duree_secondes: number
   ouverte_le: string | null
   fin_reponses_le: string | null
+  /** Pendant la question : nombre de PERSONNES ayant répondu (une personne ne compte qu'une fois). */
   nb_reponses: number
+  /** Question ouverte : nombre de réponses que chaque participant peut envoyer (1 à 10 ; absent = 1). */
+  max_reponses?: number
   /** qcm_multiple : nombre de bonnes réponses si le formateur l'annonce, sinon null (jamais les indices avant la fermeture). */
   nb_bonnes?: number | null
   /** Atelier : étapes figées de la session, dans l'ordre. `enonce` = titre de l'atelier, `explication` = consigne générale. */
@@ -58,7 +61,10 @@ export interface MaProgression {
 
 export interface ResultatsQuestion {
   question_id: string
+  /** Question ouverte : nombre TOTAL de réponses (une personne peut en avoir envoyé plusieurs). */
   nb_reponses: number
+  /** Question ouverte : nombre de personnes ayant répondu au moins une fois. */
+  nb_participants_ayant_repondu?: number
   // QCM
   bonne_reponse?: number
   // QCM à plusieurs bonnes réponses (repartition = personnes ayant coché chaque proposition)
@@ -75,6 +81,8 @@ export interface ResultatsQuestion {
   explication?: string | null
   // Côté participant uniquement
   ma_reponse?: number | number[] | string | null
+  /** Question ouverte : tous mes textes, dans l'ordre d'envoi. */
+  mes_reponses?: string[]
   est_correcte?: boolean | null
   /** qcm_multiple : au moins une bonne réponse trouvée, sans avoir tout bon. */
   presque?: boolean
@@ -120,7 +128,9 @@ export interface EtatSession {
   jauge: Jauge
   moi?: { participant_id: string; pseudo: string; table_id: string | null } // participant seulement
   question?: QuestionCourante
-  a_repondu?: boolean // participant seulement
+  a_repondu?: boolean // participant seulement (question ouverte à réponses multiples : a atteint le maximum)
+  /** Participant, question ouverte en cours : mes textes déjà envoyés, dans l'ordre. */
+  mes_reponses?: string[]
   resultats?: ResultatsQuestion
   /** Message de célébration à afficher (état « résultats », question choisie par le formateur), sinon null. */
   celebration?: string | null

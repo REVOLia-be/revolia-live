@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BlocPourquoi from '../composants/BlocPourquoi'
 import Bouton from '../composants/Bouton'
@@ -7,40 +7,59 @@ import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
 import { Ampoule, Coche, Fleche, Personne } from '../composants/Pictos'
 import { appelerRpc } from '../lib/api'
 import { assurerConnexionAnonyme } from '../lib/auth'
-import { codeErreur, messageErreur } from '../lib/erreurs'
+import EcranPasCommence, { estPasEncoreCommence } from '../composants/EcranPasCommence'
+import { codeErreur, estErreurReseau, messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
-import { lireSalle } from '../lib/memoire'
+import { lireSalle, oublierSalle } from '../lib/memoire'
 import { usePrechargement } from '../lib/photos'
 import EcranAtelierParticipant from '../composants/atelier/EcranAtelierParticipant'
 import { GrilleChoixPhotos, PhotoQuestion, TuileResultat } from '../composants/PhotosParticipant'
 import { lettre, useEtatSession, type EtatSession, type MonScore, type NomMention } from '../lib/session'
 
-// Étape 1 : s'assurer qu'on est connecté et retrouver l'identifiant de la session.
+// Étape 1 : s'assurer qu'on est connecté et retrouver la session ACTUELLE du code.
+// On interroge toujours le serveur : si la session mémorisée dans le navigateur n'est plus la session actuelle
+// (ancienne formation, même code), on l'oublie et on repasse par « Rejoindre » (nouveau pseudo).
 export default function Jouer() {
   const { code = '' } = useParams()
   const navigate = useNavigate()
-  const [pret, setPret] = useState<{ sessionId: string } | { erreur: string } | null>(null)
+  const [pret, setPret] = useState<{ sessionId: string } | { erreur: string } | { attente: true } | null>(null)
+  const [essai, setEssai] = useState(0)
+  const reessayer = useCallback(() => setEssai((n) => n + 1), [])
 
   useEffect(() => {
     let actif = true
     ;(async () => {
+      const memorisee = lireSalle(code)
       try {
         await assurerConnexionAnonyme()
-        let sessionId = lireSalle(code)?.sessionId
-        if (!sessionId) {
+        let sessionId: string
+        try {
           const infos = await appelerRpc<{ session_id: string }>('infos_session', { p_code: code })
           sessionId = infos.session_id
+        } catch (e) {
+          // Coupure de réseau pendant un rechargement : on garde la session mémorisée, la reprise se fera toute seule.
+          if (memorisee && estErreurReseau(e)) sessionId = memorisee.sessionId
+          else throw e
         }
-        if (actif) setPret({ sessionId })
+        if (!actif) return
+        if (memorisee && memorisee.sessionId !== sessionId) {
+          oublierSalle(code)
+          navigate(`/rejoindre/${encodeURIComponent(code)}`, { replace: true })
+          return
+        }
+        setPret({ sessionId })
       } catch (e) {
-        if (actif) setPret({ erreur: messageErreur(e) })
+        if (!actif) return
+        if (estPasEncoreCommence(codeErreur(e))) setPret({ attente: true })
+        else setPret({ erreur: messageErreur(e) })
       }
     })()
     return () => {
       actif = false
     }
-  }, [code])
+  }, [code, essai, navigate])
 
+  if (pret && 'attente' in pret) return <EcranPasCommence onReessayer={reessayer} />
   if (pret && 'erreur' in pret) {
     return <EcranProbleme message={pret.erreur} onRetour={() => navigate('/')} />
   }
@@ -229,24 +248,48 @@ function EcranQuestion({
   const aRepondu = envoyee || etat.a_repondu === true
   const tempsEcoule = secondes === 0
 
-  async function repondre(valeur: number | number[] | string) {
-    if (envoi) return
+  async function repondre(valeur: number | number[] | string): Promise<boolean> {
+    if (envoi) return false
     setEnvoi(true)
     setErreur(null)
     try {
       await appelerRpc('repondre', { p_question: question.id, p_valeur: valeur })
       setRappel(libelleReponse(question, valeur))
       setEnvoyee(true)
+      return true
     } catch (e) {
       if (codeErreur(e) === '23505') {
         setEnvoyee(true) // déjà répondu (par exemple avant une coupure) : tout va bien
+        return true
       } else {
         setErreur(messageErreur(e))
         recharger()
+        return false
       }
     } finally {
       setEnvoi(false)
     }
+  }
+
+  // Question ouverte à réponses multiples : envoi une par une, la liste « Tes réponses » se remplit.
+  const maxReponses = question.type === 'ouverte' ? Math.max(1, question.max_reponses ?? 1) : 1
+  if (maxReponses > 1) {
+    return (
+      <ReponsesMultiples
+        question={question}
+        max={maxReponses}
+        serveur={etat.mes_reponses ?? []}
+        termineParServeur={etat.a_repondu === true}
+        tempsEcoule={tempsEcoule}
+        bloque={bloque}
+        envoi={envoi}
+        erreur={erreur}
+        blocErreur={blocErreur}
+        setErreur={setErreur}
+        recharger={recharger}
+        setEnvoi={setEnvoi}
+      />
+    )
   }
 
   if (aRepondu) {
@@ -645,12 +688,17 @@ function ChampTexte({
   indication,
   envoi,
   onEnvoyer,
+  vider = false,
+  libelleBouton = 'Envoyer',
 }: {
   maximum: number
   ligneUnique?: boolean
   indication: string
   envoi: boolean
-  onEnvoyer: (texte: string) => void
+  onEnvoyer: (texte: string) => void | boolean | Promise<boolean | void>
+  /** Vide le champ après un envoi réussi (réponses multiples). */
+  vider?: boolean
+  libelleBouton?: string
 }) {
   const [texte, setTexte] = useState('')
   const vide = texte.trim().length === 0
@@ -660,9 +708,11 @@ function ChampTexte({
   return (
     <form
       className="flex flex-col gap-3"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault()
-        if (!vide) onEnvoyer(texte.trim())
+        if (vide) return
+        const ok = await onEnvoyer(texte.trim())
+        if (vider && ok !== false) setTexte('')
       }}
     >
       <label className="text-lg" htmlFor="saisie">
@@ -692,9 +742,146 @@ function ChampTexte({
         {texte.length} / {maximum} caractères
       </p>
       <Bouton type="submit" disabled={envoi || vide}>
-        Envoyer
+        {libelleBouton}
       </Bouton>
     </form>
+  )
+}
+
+// Question ouverte avec plusieurs réponses possibles : consigne, champ vidé après chaque envoi,
+// liste « Tes réponses », compteur « n / N », « J'ai terminé », message final au maximum.
+// L'état vient du serveur (`mes_reponses`) : après un rechargement, on reprend là où on s'était arrêté.
+function ReponsesMultiples({
+  question,
+  max,
+  serveur,
+  termineParServeur,
+  tempsEcoule,
+  bloque,
+  envoi,
+  erreur,
+  blocErreur,
+  setErreur,
+  recharger,
+  setEnvoi,
+}: {
+  question: NonNullable<EtatSession['question']>
+  max: number
+  serveur: string[]
+  termineParServeur: boolean
+  tempsEcoule: boolean
+  bloque: boolean
+  envoi: boolean
+  erreur: string | null
+  blocErreur: React.RefObject<HTMLParagraphElement>
+  setErreur: (m: string | null) => void
+  recharger: () => void
+  setEnvoi: (b: boolean) => void
+}) {
+  const [locales, setLocales] = useState<string[]>([])
+  const [termine, setTermine] = useState(false)
+  // Le serveur fait foi ; la liste locale ne sert qu'entre un envoi et le prochain rechargement.
+  const liste = locales.length > serveur.length ? locales : serveur
+  const n = liste.length
+  const auMaximum = n >= max || termineParServeur
+
+  async function envoyer(texte: string): Promise<boolean> {
+    if (envoi) return false
+    setEnvoi(true)
+    setErreur(null)
+    try {
+      await appelerRpc('repondre', { p_question: question.id, p_valeur: texte })
+      setLocales([...liste, texte])
+      recharger()
+      return true
+    } catch (e) {
+      if (/d[ée]j[àa] envoy/i.test((e as { message?: string }).message ?? '')) {
+        recharger() // « Tu as déjà envoyé tes N réponses » : on se recale sur le serveur
+        setTermine(true)
+        return false
+      }
+      setErreur(messageErreur(e))
+      recharger()
+      return false
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  const titre = question.enonce.trim() ? (
+    <h1 className="text-2xl leading-snug [overflow-wrap:anywhere]">{question.enonce}</h1>
+  ) : (
+    <h1 className="sr-only">Question {question.ordre}</h1>
+  )
+
+  const reponsesEnvoyees = n > 0 && (
+    <section aria-labelledby="tes-reponses" className="flex flex-col gap-2">
+      <h2 id="tes-reponses" className="flex items-baseline justify-between gap-3 text-lg font-bold">
+        <span>Tes réponses</span>
+        <span data-testid="compteur-reponses" className="tabular-nums text-vert">
+          {n} / {max}
+        </span>
+      </h2>
+      <ol className="flex flex-col gap-2">
+        {liste.map((t, i) => (
+          <li key={i} className="flex gap-3 rounded-champ border-2 border-vertFonce px-3 py-2 text-base font-semibold leading-snug">
+            <span className="shrink-0 tabular-nums text-vert">{i + 1}.</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{t}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+
+  if (auMaximum || termine) {
+    return (
+      <>
+        {auMaximum ? (
+          <h1 className="text-3xl">Merci ! Tu as envoyé tes {max} réponses.</h1>
+        ) : (
+          <h1 className="text-3xl">Réponses envoyées ✓</h1>
+        )}
+        {reponsesEnvoyees}
+        <p className="text-lg">Regarde l'écran pour découvrir les résultats.</p>
+      </>
+    )
+  }
+
+  if (tempsEcoule) {
+    return (
+      <>
+        <h1 className="text-3xl">Le temps est écoulé</h1>
+        {reponsesEnvoyees}
+        <p className="text-lg">Pas de souci, ça arrive à tout le monde. Regarde l'écran et tu seras prêt pour la prochaine !</p>
+      </>
+    )
+  }
+
+  return (
+    <>
+      {question.image && <PhotoQuestion chemin={question.image} />}
+      {titre}
+      <p className="text-lg font-bold text-vert">Tu peux envoyer jusqu'à {max} réponses, une par une.</p>
+      {erreur && (
+        <p ref={blocErreur} role="alert" className="rounded-champ border-2 border-vert bg-blanc px-4 py-3 text-lg font-semibold leading-snug text-vertFonce">
+          {erreur}
+        </p>
+      )}
+      {reponsesEnvoyees}
+      <ChampTexte
+        maximum={280}
+        indication={n === 0 ? 'Écris ta réponse' : 'Écris une autre réponse'}
+        envoi={bloque}
+        onEnvoyer={envoyer}
+        vider
+        libelleBouton={n === 0 ? 'Envoyer' : 'Envoyer cette réponse'}
+      />
+      {n > 0 && (
+        <Bouton type="button" variante="secondaire" onClick={() => setTermine(true)} disabled={bloque}>
+          J'ai terminé
+        </Bouton>
+      )}
+    </>
   )
 }
 
@@ -702,7 +889,9 @@ function ChampTexte({
 function EcranResultatsLibre({ etat }: { etat: EtatSession }) {
   const question = etat.question!
   const resultats = etat.resultats
-  const aRepondu = resultats?.ma_reponse !== null && resultats?.ma_reponse !== undefined
+  const mes = question.type === 'ouverte' ? resultats?.mes_reponses ?? [] : []
+  const plusieurs = mes.length > 1 // une seule réponse : affichage habituel
+  const aRepondu = (resultats?.ma_reponse !== null && resultats?.ma_reponse !== undefined) || mes.length > 0
   if (!resultats) return <h1 className="text-3xl">Regarde l'écran</h1>
 
   return (
@@ -712,15 +901,16 @@ function EcranResultatsLibre({ etat }: { etat: EtatSession }) {
       ) : (
         <Statut pastille="ampoule" titre="Pas eu le temps" sous="Pas grave, à la prochaine question !" />
       )}
-      {aRepondu && (
-        <div className="flex min-h-[60px] items-center gap-3 rounded-champ border-2 border-vertFonce px-3 py-2 text-base font-semibold leading-tight">
-          <span className="min-w-0 [overflow-wrap:anywhere]">{libelleReponse(question, resultats.ma_reponse as number | string)}</span>
-          <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap rounded-pilule border-[1.5px] border-vertFonce px-2 py-0.5 text-xs font-bold">
-            <Personne />
-            Ta réponse
-          </span>
-        </div>
-      )}
+      {aRepondu &&
+        (plusieurs ? mes : [libelleReponse(question, (resultats.ma_reponse ?? mes[0]) as number | string)]).map((texte, i) => (
+          <div key={i} className="flex min-h-[60px] items-center gap-3 rounded-champ border-2 border-vertFonce px-3 py-2 text-base font-semibold leading-tight">
+            <span className="min-w-0 [overflow-wrap:anywhere]">{plusieurs ? `« ${texte} »` : texte}</span>
+            <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap rounded-pilule border-[1.5px] border-vertFonce px-2 py-0.5 text-xs font-bold">
+              <Personne />
+              {plusieurs ? `Ta réponse ${i + 1}` : 'Ta réponse'}
+            </span>
+          </div>
+        ))}
       {aRepondu && question.type === 'echelle' && resultats.moyenne != null && (
         <p className="text-lg">
           Moyenne de la salle : <span className="text-2xl font-bold">{String(resultats.moyenne).replace('.', ',')}</span> / 5

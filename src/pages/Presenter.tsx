@@ -16,6 +16,7 @@ import { appelerRpc } from '../lib/api'
 import { useFormateur } from '../lib/auth'
 import { messageErreur } from '../lib/erreurs'
 import { useSecondesRestantes } from '../lib/horloge'
+import { supabase } from '../lib/supabase'
 import { usePrechargement } from '../lib/photos'
 import { useEtatSession, type ParticipantListe } from '../lib/session'
 
@@ -60,6 +61,24 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
   const question = etat?.etat === 'question' ? etat.question : undefined
   const secondes = useSecondesRestantes(question?.fin_reponses_le, decalage)
   usePrechargement(etat?.question?.image, etat?.question?.images_choix)
+
+  // Question ouverte à réponses multiples : le nombre TOTAL de réponses (l'état ne donne que le nombre de personnes).
+  const [totalReponses, setTotalReponses] = useState<{ question: string; total: number } | null>(null)
+  const questionMultiple = question?.type === 'ouverte' && (question.max_reponses ?? 1) > 1 ? question.id : null
+  useEffect(() => {
+    if (!questionMultiple) return
+    let actif = true
+    void (async () => {
+      const { count, error } = await supabase
+        .from('reponses')
+        .select('id', { count: 'exact', head: true })
+        .eq('question_id', questionMultiple)
+      if (actif && !error && count !== null) setTotalReponses({ question: questionMultiple, total: count })
+    })()
+    return () => {
+      actif = false
+    }
+  }, [questionMultiple, etat])
 
   async function fermerQuestion() {
     if (!question || questionFermee.current === question.id) return
@@ -148,7 +167,11 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
       const suivant = SUIVANT.includes(e.key)
       const precedent = PRECEDENT.includes(e.key)
       const ecranNoir = ECRAN_NOIR.includes(e.key)
-      if (!suivant && !precedent && !ecranNoir) return // F5, Échap… : on ne touche à rien
+      // « N » : page suivante du mur de réponses (seulement quand le mur est paginé).
+      const murSuivant = e.key === 'n' || e.key === 'N'
+      if (!suivant && !precedent && !ecranNoir && !murSuivant) return // F5, Échap… : on ne touche à rien
+      const murPagine = document.querySelector('[data-mur-pages]') !== null
+      if (murSuivant && !murPagine) return
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
       const cible = e.target instanceof HTMLElement ? e.target : null
       // Champ de saisie, fenêtre de modération : les touches lui appartiennent.
@@ -165,6 +188,12 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
       if (c.noir) {
         setNoir(false) // retire le voile, sans action
         dernierGeste.current = Date.now()
+        return
+      }
+      // Mur de réponses paginé : « précédent » (← , Page préc., télécommande) et « N » font défiler les pages du mur.
+      // « Suivant » garde son rôle : question suivante.
+      if (murPagine && (precedent || murSuivant)) {
+        window.dispatchEvent(new CustomEvent('mur-page', { detail: precedent ? -1 : 1 }))
         return
       }
       const maintenant = Date.now()
@@ -232,7 +261,14 @@ function PresenterConnecte({ sessionId }: { sessionId: string }) {
         <EcranAtelier etat={etat} enCours={enCours} erreur={erreurAction} onTerminer={fermerQuestion} />
       )}
       {etat.etat === 'question' && etat.question && etat.question.type !== 'atelier' && (
-        <EcranQuestion etat={etat} secondes={secondes} enCours={enCours} erreur={erreurAction} onArreter={fermerQuestion} />
+        <EcranQuestion
+          etat={etat}
+          secondes={secondes}
+          enCours={enCours}
+          erreur={erreurAction}
+          onArreter={fermerQuestion}
+          totalReponses={totalReponses && totalReponses.question === etat.question.id ? totalReponses.total : null}
+        />
       )}
       {etat.etat === 'resultats' && etat.question?.type === 'atelier' && (
         <EcranResultatsAtelier

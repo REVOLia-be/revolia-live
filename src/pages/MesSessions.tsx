@@ -4,6 +4,7 @@ import Bouton from '../composants/Bouton'
 import Carte from '../composants/Carte'
 import LogoMarque from '../composants/LogoMarque'
 import MiseEnPageParticipant from '../composants/MiseEnPageParticipant'
+import { appelerRpc } from '../lib/api'
 import { useFormateur } from '../lib/auth'
 import { exporterSession } from '../lib/exporter'
 import { messageErreur } from '../lib/erreurs'
@@ -75,6 +76,8 @@ function ListeSessions() {
   const [sessions, setSessions] = useState<LigneSession[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [exportEnCours, setExportEnCours] = useState<string | null>(null)
+  const [aArchiver, setAArchiver] = useState<string | null>(null) // session en attente de confirmation
+  const [archivageEnCours, setArchivageEnCours] = useState<string | null>(null)
 
   useEffect(() => {
     let actif = true
@@ -107,6 +110,21 @@ function ListeSessions() {
       setErreur(messageErreur(e))
     } finally {
       setExportEnCours(null)
+    }
+  }
+
+  async function archiver(session: LigneSession) {
+    setArchivageEnCours(session.id)
+    setErreur(null)
+    try {
+      await appelerRpc('archiver_session', { p_session: session.id })
+      const maintenant = new Date().toISOString()
+      setSessions((liste) => (liste ?? []).map((x) => (x.id === session.id ? { ...x, etat: 'terminee', terminee_le: maintenant } : x)))
+      setAArchiver(null)
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setArchivageEnCours(null)
     }
   }
 
@@ -156,7 +174,32 @@ function ListeSessions() {
             >
               {exportEnCours === s.id ? 'Export en cours…' : 'Exporter (CSV)'}
             </Bouton>
+            {s.etat !== 'terminee' && (
+              <Bouton
+                type="button"
+                variante="secondaire"
+                onClick={() => setAArchiver(s.id)}
+                disabled={archivageEnCours !== null}
+              >
+                Archiver
+              </Bouton>
+            )}
           </div>
+          {aArchiver === s.id && (
+            <div role="alertdialog" aria-label="Confirmer l'archivage" className="flex flex-col gap-3 rounded-champ border-2 border-vert p-4">
+              <p className="text-lg font-semibold">
+                Archiver cette session ? Elle sera terminée : les participants ne pourront plus y répondre. Ses résultats et son export restent disponibles.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Bouton type="button" onClick={() => void archiver(s)} disabled={archivageEnCours !== null}>
+                  {archivageEnCours === s.id ? 'Archivage…' : 'Oui, archiver'}
+                </Bouton>
+                <Bouton type="button" variante="secondaire" onClick={() => setAArchiver(null)} disabled={archivageEnCours !== null}>
+                  Non, garder
+                </Bouton>
+              </div>
+            </div>
+          )}
         </Carte>
       ))}
     </main>

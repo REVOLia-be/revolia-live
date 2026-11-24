@@ -341,6 +341,31 @@ export default function EditeurQuestion({
         </div>
       )}
 
+      {question.type === 'ouverte' && (
+        <div>
+          <label className="mb-1 block text-base font-semibold" htmlFor={`maxrep-${question.id}`}>
+            Nombre de réponses par participant
+          </label>
+          <p id={`aide-maxrep-${question.id}`} className="mb-1 text-sm">
+            1 = une seule réponse. Jusqu'à 10 : chacun envoie ses réponses une par une, par exemple pour lister plusieurs idées.
+          </p>
+          <select
+            id={`maxrep-${question.id}`}
+            aria-describedby={`aide-maxrep-${question.id}`}
+            value={question.maxReponses}
+            onChange={(e) => maj({ maxReponses: Number(e.target.value) })}
+            className="min-h-[56px] w-full rounded-champ border-2 border-vert bg-blanc px-4 text-lg text-vertFonce sm:w-40"
+          >
+            {Array.from({ length: LIMITES.maxReponses }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <Message texte={err.maxReponses} />
+        </div>
+      )}
+
       {estQcm(question.type) && (
         <div>
           <button type="button" className={PETIT_BOUTON} onClick={() => onChange(convertirQcm(question, multiple ? 'qcm' : 'qcm_multiple'))}>
