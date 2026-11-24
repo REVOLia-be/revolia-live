@@ -7,7 +7,8 @@ Serveur MCP distant de REVOLia Live (Edge Function Supabase). Il permet à Claud
 - URL publique : `https://igwnzxyraxxyaprdkkvu.supabase.co/functions/v1/mcp`
 - Transport : « Streamable HTTP », mode sans état (une instance par requête, réponses JSON).
 - Bibliothèque : SDK officiel `@modelcontextprotocol/sdk` 1.32.2 (version figée) + `zod` 3.25.76.
-- Fichiers : `index.ts` (serveur, authentification, outils), `validation.ts` (règles de validation, identiques aux contraintes SQL).
+- Photos : codecs `@jsquash/jpeg` 1.6.0, `@jsquash/png` 3.1.1, `@jsquash/webp` 1.5.0 (WebAssembly, versions figées).
+- Fichiers : `index.ts` (serveur, authentification, outils), `validation.ts` (règles de validation, identiques aux contraintes SQL), `photos.ts` (téléchargement sécurisé, contrôle et réduction des photos).
 
 ## Déploiement
 
@@ -47,12 +48,40 @@ Métadonnées du serveur d'autorisation : `https://igwnzxyraxxyaprdkkvu.supabase
 | `supprimer_question` | Supprime une question, renumérote (annotation « destructif ») |
 | `reordonner_questions` | Nouvel ordre, en une seule requête (contrainte d'unicité différée) |
 | `modifier_quiz` | Titre, description, célébrations |
+| `ajouter_photo_question` | Photo de la question (remplace l'ancienne) |
+| `retirer_photo_question` | Retire la photo de la question |
+| `definir_photos_propositions` | Une photo par proposition (QCM / QCM multiple, toutes ou aucune), légendes facultatives |
+| `retirer_photos_propositions` | Retire les photos des propositions |
 | `lister_mes_sessions` | Sessions du formateur (état, nb de participants) |
 | `resultats_session` | Résultats agrégés par question (via `resultats_question`) + chiffres globaux (via `etat_session`, qui vérifie que tu animes la session ; sans pseudos) |
 
-Il n'existe **aucun outil pour supprimer un quiz** ni pour lancer une session. Les photos ne sont pas gérées : l'IA crée le quiz, le formateur ajoute les photos dans l'éditeur.
+Il n'existe **aucun outil pour supprimer un quiz** ni pour lancer une session.
 
 Format d'une question : `{ type, enonce, choix?, bonnes_reponses?, annoncer_nombre?, libelle_min?, libelle_max?, duree_secondes?, explication? }`. `bonnes_reponses` = indices en base 0 (exactement 1 pour `qcm`, au moins 2 et pas toutes pour `qcm_multiple`). Propositions limitées à 100 caractères (confort d'affichage ; la base n'impose pas cette limite).
+
+## Photos
+
+L'IA crée d'abord le quiz, puis ajoute les photos question par question. `source` = **exactement un** de `{ url: "https://…" }` ou `{ base64: "…", type_mime: "image/jpeg" | "image/png" | "image/webp" }`. Rappel donné à l'IA : uniquement des images libres de droits ou fournies par le formateur, aucune personne reconnaissable sans son accord.
+
+| Règle | Valeur |
+|---|---|
+| Entrée par adresse | `https` seulement, 5 Mo maximum (lecture en flux, coupée au-delà), 10 s en tout |
+| Entrée base64 | 1,5 Mo décodés par photo, 6 Mo au total par appel |
+| Formats | JPEG, PNG, WebP, **vérifiés sur les octets** (le type annoncé doit correspondre) ; GIF, SVG, HEIC, PDF refusés |
+| Taille d'origine | 16 millions de pixels au plus (lu dans l'en-tête avant de décoder) |
+| Photo de question | 1280 px de plus grand côté, 250 Ko au plus |
+| Photo de proposition | 640 px de plus grand côté, 80 Ko au plus |
+| Sortie | WebP (transparence conservée), qualité 0,75 puis 0,65, 0,55, 0,5 ; encore trop lourd après 0,5 → refus avec un message clair. Repli en JPEG (fond blanc) si le codec WebP échoue |
+| Orientation EXIF | lue dans les JPEG et appliquée (les 8 cas) |
+| Légendes | 200 caractères maximum, remplacent le texte des propositions |
+
+Écriture : la photo est déposée dans le bucket `quiz-images` à `<id du formateur>/<uuid>.<ext>` **avec le jeton de l'utilisateur** (politiques de stockage, jamais `service_role`), puis la question est mise à jour (RLS). Si la mise à jour échoue, le fichier envoyé est supprimé. Pour plusieurs propositions, tout est préparé avant d'écrire : une photo refusée n'enregistre rien. La base ne garde que le chemin.
+
+Ancienne photo remplacée ou retirée : supprimée du stockage seulement si elle est dans le dossier du formateur **et** qu'aucune question ni aucune session déjà lancée ne l'utilise encore (les sessions gardent une copie du chemin) ; au moindre doute, elle est conservée.
+
+**Sécurité du téléchargement (anti-SSRF)** : adresses `https` seulement, sans identifiant, port 443 uniquement ; refus de `localhost`, des adresses IP (IPv4 sous toutes ses écritures, IPv6), des noms en `.local` / `.internal` et des noms sans point ; `redirect: 'manual'`, 3 redirections au plus, chacune revalidée avec les mêmes règles ; le nom de domaine est aussi résolu en DNS et refusé s'il pointe vers une adresse privée ou réservée (au mieux : si la résolution DNS n'est pas permise dans l'environnement, les règles de nom restent seules).
+
+**Limites** : une résolution DNS différente entre le contrôle et le téléchargement (« DNS rebinding ») n'est pas exclue à 100 %. Les Edge Functions limitent le temps de calcul : une photo de 16 millions de pixels prend environ une seconde ; pour un QCM de 6 propositions, envoyer des photos déjà petites ou en plusieurs appels. Le HEIC (iPhone) n'est pas accepté : demander un JPEG. Les modules WebAssembly des codecs sont chargés depuis le paquet npm : à vérifier au premier déploiement (une photo de test).
 
 ## Confidentialité
 

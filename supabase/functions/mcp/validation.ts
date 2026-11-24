@@ -67,7 +67,7 @@ function texteOptionnel(v: unknown, champ: string, max: number, etiquette: strin
 export function validerQuestion(
   brut: unknown,
   etiquette: string,
-  options: { enonceVideAutorise?: boolean } = {},
+  options: { enonceVideAutorise?: boolean; propositionMax?: number } = {},
 ): { ligne?: LigneQuestion; erreurs: string[] } {
   const erreurs: string[] = []
   if (!brut || typeof brut !== 'object' || Array.isArray(brut)) {
@@ -80,8 +80,8 @@ export function validerQuestion(
     if (CHAMPS_QUESTION.includes(cle)) continue
     if (/^image|photo/i.test(cle)) {
       erreurs.push(
-        `${etiquette} : le champ « ${cle} » n'est pas géré ici. Les photos ne peuvent pas être ajoutées par cet outil : ` +
-          `crée la question sans photo, puis demande au formateur de l'ajouter dans l'éditeur de quiz (lien fourni après la création).`,
+        `${etiquette} : le champ « ${cle} » n'est pas géré ici. Les photos ne se donnent pas dans la question : ` +
+          `crée la question sans photo, puis utilise ajouter_photo_question ou definir_photos_propositions (avec le numéro de la question).`,
       )
     } else if (cle === 'bonne_reponse') {
       erreurs.push(`${etiquette} : utilise « bonnes_reponses » (liste d'indices, base 0), même pour un QCM à une seule bonne réponse, ex. [2].`)
@@ -127,8 +127,9 @@ export function validerQuestion(
           return
         }
         const t = c.trim()
-        if (t.length > LIMITES.proposition) {
-          erreurs.push(`${etiquette} : la proposition ${i + 1} fait ${t.length} caractères, le maximum est ${LIMITES.proposition} (elles sont projetées sur grand écran). Raccourcis-la.`)
+        const maxProp = options.propositionMax ?? LIMITES.proposition
+        if (t.length > maxProp) {
+          erreurs.push(`${etiquette} : la proposition ${i + 1} fait ${t.length} caractères, le maximum est ${maxProp} (elles sont projetées sur grand écran). Raccourcis-la.`)
         }
         propositions.push(t)
       })

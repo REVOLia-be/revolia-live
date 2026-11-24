@@ -10,7 +10,9 @@
 //   * authentification OAuth 2.1 faite ICI (la fonction est déployée avec verify_jwt = false) ;
 //   * toutes les données sont lues/écrites avec le jeton de l'utilisateur : la RLS s'applique, jamais de service_role ;
 //   * seuls les formateurs actifs passent ; les comptes anonymes (participants) sont refusés ;
-//   * aucun pseudo de participant ne sort jamais ; aucun outil ne supprime un quiz.
+//   * aucun pseudo de participant ne sort jamais ; aucun outil ne supprime un quiz ;
+//   * photos : récupérées et réduites ICI (photos.ts), déposées dans le stockage avec le jeton de l'utilisateur
+//     (politiques de stockage) ; la base ne garde que le chemin.
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { McpServer } from 'npm:@modelcontextprotocol/sdk@1.32.2/server/mcp.js'
@@ -26,6 +28,7 @@ import {
   validerTitre,
   type LigneQuestion,
 } from './validation.ts'
+import { ErreurPhoto, LIMITES_PHOTO, REGLAGES, TYPES_MIME, decoderBase64, preparerPhoto, telechargerPhoto, type GenrePhoto, type PhotoPreparee } from './photos.ts'
 
 // ---------------------------------------------------------------------------
 // Adresses
@@ -45,6 +48,10 @@ function urlMetadonnees(base: string): string {
 const SERVEUR_AUTORISATION = `${URL_PROJET}/auth/v1`
 const URL_APPLI = 'https://quiz.revolia.be'
 const lienQuiz = (id: string) => `${URL_APPLI}/formateur/quiz/${id}`
+const BUCKET_PHOTOS = 'quiz-images'
+// Adresse publique d'une photo (bucket public) ; la base ne garde que le chemin `<uuid formateur>/<uuid>.<ext>`.
+const urlPhoto = (chemin: string) => `${URL_PROJET}/storage/v1/object/public/${BUCKET_PHOTOS}/${chemin}`
+const CHEMIN_PHOTO = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(webp|jpg|png)$/
 
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -202,7 +209,8 @@ function presenterQuestion(q: Ligne, numero: number) {
     ...(q.type === 'echelle' ? { libelle_min: q.libelle_min, libelle_max: q.libelle_max } : {}),
     duree_secondes: q.duree_secondes,
     explication: q.explication ?? null,
-    ...(q.image_question || q.images_choix ? { photos: 'cette question contient des photos (modifiables seulement dans l\'éditeur)' } : {}),
+    ...(q.image_question ? { photo_question: urlPhoto(q.image_question) } : {}),
+    ...(q.images_choix ? { photos_propositions: (q.images_choix as string[]).map(urlPhoto) } : {}),
   }
 }
 
@@ -234,6 +242,101 @@ async function ecrireOrdre(ctx: Contexte, lignes: Ligne[], action: string) {
   const { error } = await ctx.sb.from('questions').upsert(lignes, { onConflict: 'id' })
   if (error) echec(error, action)
 }
+
+// ---------------------------------------------------------------------------
+// Photos : récupération, dépôt dans le stockage, nettoyage
+// ---------------------------------------------------------------------------
+interface SourcePhoto {
+  url?: string
+  base64?: string
+  type_mime?: string
+}
+
+// Transforme une source (URL ou base64) en petite image prête à déposer. `budget` suit le total des octets
+// base64 décodés d'un même appel (le téléchargement par URL est déjà borné à 5 Mo par photo).
+async function obtenirPhoto(source: SourcePhoto, genre: GenrePhoto, etiquette: string, budget: { octets: number }): Promise<PhotoPreparee> {
+  try {
+    const a = source?.url !== undefined && source.url !== null
+    const b = source?.base64 !== undefined && source.base64 !== null
+    if (a === b) throw new ErreurPhoto('« source » doit contenir EXACTEMENT un de : { url: "https://…" } ou { base64: "…", type_mime: "image/jpeg" | "image/png" | "image/webp" }.')
+    let octets: Uint8Array
+    let typeAnnonce: string | undefined
+    if (a) {
+      if (typeof source.url !== 'string') throw new ErreurPhoto('« url » doit être un texte.')
+      if (source.type_mime !== undefined) throw new ErreurPhoto('« type_mime » ne s\'utilise qu\'avec « base64 » : pour une url, le type est contrôlé sur le contenu.')
+      octets = await telechargerPhoto(source.url)
+    } else {
+      if (typeof source.base64 !== 'string') throw new ErreurPhoto('« base64 » doit être un texte.')
+      if (!source.type_mime || !(TYPES_MIME as readonly string[]).includes(source.type_mime)) {
+        throw new ErreurPhoto(`Avec « base64 », « type_mime » est obligatoire et vaut ${TYPES_MIME.join(', ')}.`)
+      }
+      typeAnnonce = source.type_mime
+      octets = decoderBase64(source.base64)
+      budget.octets += octets.byteLength
+      if (budget.octets > LIMITES_PHOTO.totalOctetsParAppel) {
+        throw new ErreurPhoto(`Trop de données en base64 dans un seul appel (maximum ${LIMITES_PHOTO.totalOctetsParAppel / 1048576} Mo décodés au total). Utilise des adresses https:// ou envoie les photos en plusieurs appels.`)
+      }
+    }
+    return await preparerPhoto(octets, genre, typeAnnonce)
+  } catch (e) {
+    if (e instanceof ErreurPhoto) refuser(`${etiquette} : ${e.message}`)
+    throw e
+  }
+}
+
+// Dépose la photo à `<uid>/<uuid>.<ext>` avec le jeton de l'utilisateur (les politiques de stockage s'appliquent).
+async function deposerPhoto(ctx: Contexte, photo: PhotoPreparee): Promise<string> {
+  const chemin = `${ctx.uid}/${crypto.randomUUID()}.${photo.extension}`
+  const { error } = await ctx.sb.storage.from(BUCKET_PHOTOS).upload(chemin, photo.octets, { contentType: photo.contentType, upsert: false, cacheControl: '31536000' })
+  if (error) {
+    console.error('Dépôt de photo', (error as { statusCode?: string }).statusCode ?? '')
+    refuser("Le dépôt de la photo dans le stockage a échoué. Réessaie dans un instant ; si cela continue, préviens JF.")
+  }
+  return chemin
+}
+
+// Supprime des fichiers qu'on vient d'envoyer (annulation) ou dont plus rien ne dépend. Silencieux : un fichier
+// orphelin ne gêne personne.
+async function supprimerFichiers(ctx: Contexte, chemins: string[]) {
+  const surs = chemins.filter((c) => CHEMIN_PHOTO.test(c) && c.startsWith(`${ctx.uid}/`))
+  if (surs.length === 0) return
+  try {
+    await ctx.sb.storage.from(BUCKET_PHOTOS).remove(surs)
+  } catch (e) {
+    console.error('Suppression de photo', e instanceof Error ? e.name : '')
+  }
+}
+
+// Supprime une ancienne photo seulement si elle est dans le dossier de l'utilisateur ET qu'aucune question (autre quiz,
+// quiz copié) ni aucune session déjà lancée (copie des photos) ne l'utilise encore. Au moindre doute : on garde.
+async function supprimerSiInutilisee(ctx: Contexte, anciens: (string | null | undefined)[]) {
+  for (const chemin of new Set(anciens.filter((c): c is string => !!c && c.startsWith(`${ctx.uid}/`) && CHEMIN_PHOTO.test(c)))) {
+    let utilisee = false
+    for (const table of ['questions', 'questions_session']) {
+      for (const filtre of [(r: any) => r.eq('image_question', chemin), (r: any) => r.contains('images_choix', [chemin])]) {
+        const { count, error } = await filtre(ctx.sb.from(table).select('id', { count: 'exact', head: true }))
+        if (error || (count ?? 1) > 0) utilisee = true
+      }
+    }
+    if (!utilisee) await supprimerFichiers(ctx, [chemin])
+  }
+}
+
+// Écrit les colonnes photo d'une question (RLS) et vérifie qu'une ligne a bien été modifiée.
+async function ecrirePhotos(ctx: Contexte, cible: Ligne, quizId: string, maj: Ligne) {
+  const { data, error } = await ctx.sb.from('questions').update(maj).eq('id', cible.id).eq('quiz_id', quizId).select('id')
+  if (error) echec(error, 'enregistrer la photo')
+  if (!data || data.length !== 1) refuser("La question n'a pas pu être modifiée (elle a peut-être été supprimée entre-temps). Relis le quiz avec lire_quiz.")
+}
+
+const RAPPEL_DROITS = "Rappel : n'utilise que des images libres de droits ou fournies par le formateur, et aucune personne reconnaissable sans son accord."
+
+const decrire = (p: PhotoPreparee, chemin: string) => ({
+  url_publique: urlPhoto(chemin),
+  format: p.extension === 'webp' ? 'WebP' : 'JPEG',
+  dimensions: `${p.largeur} × ${p.hauteur} px`,
+  poids_ko: Math.round((p.octets.byteLength / 1024) * 10) / 10,
+})
 
 // ---------------------------------------------------------------------------
 // Schémas d'entrée (zod). Les bornes détaillées sont vérifiées dans validation.ts, qui produit des messages
@@ -268,6 +371,14 @@ const celebrationsSchema = z
   .array(z.object({ apres_question: z.number().int(), message: z.string() }))
   .describe(`Messages de célébration affichés à toute la salle : [{ apres_question: numéro de la question (≥ 1), message: ${LIMITES.celebrationMessage} caractères maximum }]. ${LIMITES.celebrationsMax} au maximum, une seule par position.`)
 
+const sourceSchema = z
+  .object({
+    url: z.string().optional().describe('Adresse https:// publique qui mène DIRECTEMENT à l\'image (pas une page web). 5 Mo maximum, ports et adresses IP refusés.'),
+    base64: z.string().optional().describe(`Contenu de l'image en base64 (sans préfixe data:), ${(LIMITES_PHOTO.base64Octets / 1048576).toFixed(1).replace('.', ',')} Mo maximum une fois décodé. À n'utiliser que si tu n'as pas d'adresse https://.`),
+    type_mime: z.enum(TYPES_MIME).optional().describe('Obligatoire avec base64 : image/jpeg, image/png ou image/webp (contrôlé sur le contenu réel).'),
+  })
+  .describe(`La photo : EXACTEMENT un de { url: "https://…" } ou { base64: "…", type_mime: "image/jpeg" | "image/png" | "image/webp" }. JPEG, PNG ou WebP uniquement (vérifié sur le contenu). Elle est réduite automatiquement. ${RAPPEL_DROITS}`)
+
 const idQuiz = z.string().describe("Identifiant du quiz (uuid, fourni par lister_mes_quiz ou creer_quiz).")
 
 // ---------------------------------------------------------------------------
@@ -279,7 +390,10 @@ const INSTRUCTIONS =
   "Écris des questions courtes, bienveillantes et adaptées à des débutants (vocabulaire simple, jamais piégeux). " +
   `Propositions de QCM : ${LIMITES.proposition} caractères maximum, de même longueur et de même forme. ` +
   "Ajoute si possible un « Pourquoi ? » (explication) à chaque question. " +
-  "Les photos ne peuvent pas être ajoutées ici : le formateur les ajoute dans l'éditeur. " +
+  "Photos : tu peux en ajouter avec ajouter_photo_question (une photo pour la question) ou definir_photos_propositions (une photo par proposition d'un QCM : toutes ou aucune), et les retirer avec retirer_photo_question / retirer_photos_propositions. " +
+  "Une source = EXACTEMENT une adresse https:// ({ url }) ou un contenu base64 ({ base64, type_mime }) ; JPEG, PNG ou WebP ; 5 Mo maximum par adresse, 1,5 Mo en base64 ; les photos sont réduites automatiquement (1280 px et 250 Ko pour une question, 640 px et 80 Ko pour une proposition) et celles qui restent trop lourdes sont refusées. " +
+  "N'utilise que des images libres de droits ou fournies par le formateur, et aucune personne reconnaissable sans son accord ; en cas de doute, demande au formateur de fournir la photo. " +
+  "Crée d'abord le quiz et ses questions, puis ajoute les photos question par question (lire_quiz indique les photos présentes et leur adresse publique). " +
   "Tu ne peux pas supprimer un quiz ni lancer une session en direct ; le formateur le fait dans l'application.";
 
 function construireServeur(ctx: Contexte): McpServer {
@@ -322,7 +436,7 @@ function construireServeur(ctx: Contexte): McpServer {
     'lire_quiz',
     {
       title: 'Lire un quiz',
-      description: "Renvoie un quiz complet : titre, description, célébrations et toutes les questions dans l'ordre (numéro, type, énoncé, propositions, bonnes réponses en indices base 0, durée, explication). Le numéro d'une question (à partir de 1) sert aux outils de modification.",
+      description: "Renvoie un quiz complet : titre, description, célébrations et toutes les questions dans l'ordre (numéro, type, énoncé, propositions, bonnes réponses en indices base 0, durée, explication, et adresses publiques des photos : photo_question, photos_propositions). Le numéro d'une question (à partir de 1) sert aux outils de modification.",
       inputSchema: { quiz_id: idQuiz },
       annotations: lecture,
     },
@@ -347,7 +461,7 @@ function construireServeur(ctx: Contexte): McpServer {
     'creer_quiz',
     {
       title: 'Créer un quiz',
-      description: `Crée un quiz complet avec ses questions en une seule fois. Tout est vérifié avant l'écriture : en cas de problème rien n'est créé et la liste des corrections à faire est renvoyée. Au plus ${LIMITES.questionsParQuiz} questions. Pas de photos (le formateur les ajoute ensuite dans l'éditeur). Renvoie l'id, le lien d'édition et un résumé.`,
+      description: `Crée un quiz complet avec ses questions en une seule fois. Tout est vérifié avant l'écriture : en cas de problème rien n'est créé et la liste des corrections à faire est renvoyée. Au plus ${LIMITES.questionsParQuiz} questions. Pas de photos à la création : ajoute-les ensuite avec ajouter_photo_question / definir_photos_propositions. Renvoie l'id, le lien d'édition et un résumé.`,
       inputSchema: {
         titre: z.string().describe(`Titre du quiz, ${LIMITES.titre} caractères maximum.`),
         description: z.string().optional().describe(`Description facultative, ${LIMITES.description} caractères maximum.`),
@@ -394,7 +508,7 @@ function construireServeur(ctx: Contexte): McpServer {
           nb_celebrations: c.valeur.length,
           questions_sans_explication: lignes.filter((l) => !l.explication).length,
         },
-        suite: "Le formateur peut relire le quiz, ajouter des photos et lancer la session depuis le lien d'édition.",
+        suite: "Tu peux ajouter des photos avec ajouter_photo_question / definir_photos_propositions. Le formateur peut relire le quiz et lancer la session depuis le lien d'édition.",
       }
     }),
   )
@@ -441,7 +555,7 @@ function construireServeur(ctx: Contexte): McpServer {
     'modifier_question',
     {
       title: 'Modifier une question',
-      description: "Modifie une question d'un quiz : seuls les champs fournis changent, les autres sont conservés. La question complète est revérifiée. Pour effacer l'explication ou un libellé, envoie null. Une question qui contient des photos ne peut pas changer de type ni de propositions ici.",
+      description: "Modifie une question d'un quiz : seuls les champs fournis changent, les autres sont conservés. La question complète est revérifiée. Pour effacer l'explication ou un libellé, envoie null. Une question dont les propositions ont des photos ne peut pas changer de type ni de propositions ici (retire d'abord les photos avec retirer_photos_propositions, ou change les textes avec definir_photos_propositions et ses légendes). Les photos ne sont pas touchées par cet outil.",
       inputSchema: {
         quiz_id: idQuiz,
         numero_ou_id: z.union([z.number().int(), z.string()]).describe("Numéro de la question (à partir de 1, tel que renvoyé par lire_quiz) ou son id."),
@@ -471,7 +585,7 @@ function construireServeur(ctx: Contexte): McpServer {
       if (Object.keys(champs).length === 0) refuser("« champs » est vide : indique au moins un champ à modifier.")
 
       if (cible.images_choix && (champs.choix !== undefined || champs.type !== undefined)) {
-        refuser(`question ${numero} : elle contient des photos sur ses propositions ; son type et ses propositions ne peuvent être changés que dans l'éditeur (${lienQuiz(a.quiz_id)}). Tu peux modifier les autres champs.`)
+        refuser(`question ${numero} : ses propositions ont des photos ; son type et ses propositions ne peuvent pas être changés ici. Utilise retirer_photos_propositions d'abord, ou definir_photos_propositions (avec legendes) pour changer les textes. Tu peux modifier les autres champs.`)
       }
 
       const fusion: Record<string, unknown> = { ...versEntree(cible) }
@@ -486,7 +600,7 @@ function construireServeur(ctx: Contexte): McpServer {
         if (champs.choix === undefined) delete fusion.choix
         if (champs.bonnes_reponses === undefined) delete fusion.bonnes_reponses
       }
-      const r = validerQuestion(fusion, `question ${numero}`, { enonceVideAutorise: !!cible.image_question })
+      const r = validerQuestion(fusion, `question ${numero}`, { enonceVideAutorise: !!cible.image_question, propositionMax: cible.images_choix ? LIMITES_PHOTO.legende : undefined })
       if (!r.ligne) rapport(r.erreurs)
 
       const { error } = await ctx.sb.from('questions').update(r.ligne!).eq('id', cible.id).eq('quiz_id', a.quiz_id)
@@ -582,6 +696,138 @@ function construireServeur(ctx: Contexte): McpServer {
       const { error } = await ctx.sb.from('quiz').update(maj).eq('id', a.quiz_id).eq('formateur_id', ctx.uid)
       if (error) echec(error, 'modifier le quiz')
       return { resultat: 'Quiz modifié.', champs_modifies: Object.keys(maj), ...(avertissement ? { avertissement } : {}), lien_edition: lienQuiz(a.quiz_id) }
+    }),
+  )
+
+  // 4f. ajouter_photo_question
+  serveur.registerTool(
+    'ajouter_photo_question',
+    {
+      title: 'Ajouter une photo à une question',
+      description:
+        `Met une photo sur une question (remplace l'ancienne s'il y en avait une). La photo est téléchargée (adresse https://) ou décodée (base64), contrôlée (JPEG, PNG ou WebP, vérifié sur le contenu), puis réduite automatiquement à ${REGLAGES.question.cote} px de plus grand côté et ${REGLAGES.question.maxOctets / 1024} Ko au plus (WebP). Limites : 5 Mo par adresse, ${(LIMITES_PHOTO.base64Octets / 1048576).toFixed(1).replace('.', ',')} Mo en base64 décodé, délai de 10 s. Si la photo reste trop lourde après compression, elle est refusée : choisis une image plus simple. ${RAPPEL_DROITS} Le texte de la question reste affiché avec la photo.`,
+      inputSchema: { quiz_id: idQuiz, numero: z.number().int().describe('Numéro de la question (à partir de 1, tel que renvoyé par lire_quiz).'), source: sourceSchema },
+      annotations: { ...ecriture, idempotentHint: false, openWorldHint: true },
+    },
+    outil(ctx, async (a: { quiz_id: string; numero: number; source: SourcePhoto }) => {
+      await chargerQuiz(ctx, a.quiz_id)
+      const questions = await chargerQuestions(ctx, a.quiz_id)
+      const cible = trouverQuestion(questions, a.numero)
+      const photo = await obtenirPhoto(a.source, 'question', 'photo de la question', { octets: 0 })
+      const chemin = await deposerPhoto(ctx, photo)
+      try {
+        await ecrirePhotos(ctx, cible, a.quiz_id, { image_question: chemin })
+      } catch (e) {
+        await supprimerFichiers(ctx, [chemin]) // pas de fichier orphelin si l'enregistrement échoue
+        throw e
+      }
+      await supprimerSiInutilisee(ctx, [cible.image_question])
+      await toucherQuiz(ctx, a.quiz_id)
+      return { resultat: `Photo ajoutée à la question ${a.numero}.`, photo: decrire(photo, chemin), lien_edition: lienQuiz(a.quiz_id) }
+    }),
+  )
+
+  // 4g. retirer_photo_question
+  serveur.registerTool(
+    'retirer_photo_question',
+    {
+      title: "Retirer la photo d'une question",
+      description: "Retire la photo d'une question (le texte de la question est conservé). Refusé si la question n'a pas de texte : ajoute-lui d'abord un énoncé avec modifier_question.",
+      inputSchema: { quiz_id: idQuiz, numero: z.number().int().describe('Numéro de la question (à partir de 1).') },
+      annotations: { ...ecriture, idempotentHint: true },
+    },
+    outil(ctx, async (a: { quiz_id: string; numero: number }) => {
+      await chargerQuiz(ctx, a.quiz_id)
+      const cible = trouverQuestion(await chargerQuestions(ctx, a.quiz_id), a.numero)
+      if (!cible.image_question) return { resultat: `La question ${a.numero} n'a pas de photo : rien à retirer.` }
+      if (!String(cible.enonce ?? '').trim()) refuser(`La question ${a.numero} n'a pas de texte : sans photo elle serait vide. Ajoute d'abord un énoncé avec modifier_question, puis retire la photo.`)
+      await ecrirePhotos(ctx, cible, a.quiz_id, { image_question: null })
+      await supprimerSiInutilisee(ctx, [cible.image_question])
+      await toucherQuiz(ctx, a.quiz_id)
+      return { resultat: `Photo retirée de la question ${a.numero}.` }
+    }),
+  )
+
+  // 4h. definir_photos_propositions
+  serveur.registerTool(
+    'definir_photos_propositions',
+    {
+      title: 'Définir les photos des propositions',
+      description:
+        `Met une photo sur CHAQUE proposition d'un QCM ou d'un QCM à plusieurs réponses (toutes ou aucune ; remplace les anciennes). \`sources\` : une source par proposition, dans l'ordre des propositions, et leur nombre doit être égal au nombre de propositions de la question. \`legendes\` (facultatif) : un texte par proposition, ${LIMITES_PHOTO.legende} caractères maximum, qui REMPLACE le texte des propositions (le texte affiché sous la photo) ; elles doivent être toutes différentes. Chaque photo est contrôlée (JPEG, PNG ou WebP, vérifié sur le contenu) puis réduite à ${REGLAGES.choix.cote} px et ${REGLAGES.choix.maxOctets / 1024} Ko au plus. Limites : 5 Mo par adresse, ${(LIMITES_PHOTO.base64Octets / 1048576).toFixed(1).replace('.', ',')} Mo par photo en base64, ${LIMITES_PHOTO.totalOctetsParAppel / 1048576} Mo de base64 au total par appel. Si une photo est refusée, rien n'est enregistré. ${RAPPEL_DROITS}`,
+      inputSchema: {
+        quiz_id: idQuiz,
+        numero: z.number().int().describe('Numéro de la question (à partir de 1). Doit être un QCM ou un QCM à plusieurs réponses.'),
+        sources: z.array(sourceSchema).describe('Une source par proposition, dans l\'ordre.'),
+        legendes: z.array(z.string()).optional().describe(`Facultatif : un texte par proposition (${LIMITES_PHOTO.legende} caractères maximum chacun), qui remplace le texte actuel des propositions.`),
+      },
+      annotations: { ...ecriture, idempotentHint: false, openWorldHint: true },
+    },
+    outil(ctx, async (a: { quiz_id: string; numero: number; sources: SourcePhoto[]; legendes?: string[] }) => {
+      await chargerQuiz(ctx, a.quiz_id)
+      const cible = trouverQuestion(await chargerQuestions(ctx, a.quiz_id), a.numero)
+      if (cible.type !== 'qcm' && cible.type !== 'qcm_multiple') {
+        refuser(`La question ${a.numero} est de type « ${cible.type} » : des photos sur les propositions ne sont possibles que pour un QCM ou un QCM à plusieurs réponses.`)
+      }
+      const nb = (cible.choix as string[]).length
+      if (!Array.isArray(a.sources) || a.sources.length !== nb) {
+        refuser(`La question ${a.numero} a ${nb} propositions : il faut exactement ${nb} sources (une par proposition, dans l'ordre), tu en as donné ${Array.isArray(a.sources) ? a.sources.length : 0}. Toutes les propositions ont une photo, ou aucune.`)
+      }
+      const maj: Ligne = {}
+      if (a.legendes !== undefined) {
+        const erreurs: string[] = []
+        if (!Array.isArray(a.legendes) || a.legendes.length !== nb) erreurs.push(`« legendes » doit avoir exactement ${nb} textes (un par proposition).`)
+        else {
+          const l = a.legendes.map((t) => (typeof t === 'string' ? t.trim() : ''))
+          l.forEach((t, i) => {
+            if (!t) erreurs.push(`la légende ${i + 1} est vide.`)
+            else if (t.length > LIMITES_PHOTO.legende) erreurs.push(`la légende ${i + 1} fait ${t.length} caractères, le maximum est ${LIMITES_PHOTO.legende}.`)
+          })
+          if (new Set(l.map((t) => t.toLowerCase())).size !== l.length) erreurs.push('deux légendes sont identiques : chaque proposition doit être différente.')
+          if (erreurs.length === 0) maj.choix = l
+        }
+        if (erreurs.length > 0) rapport(erreurs)
+      }
+
+      // Toutes les photos sont préparées AVANT d'écrire quoi que ce soit : une photo refusée n'enregistre rien.
+      const budget = { octets: 0 }
+      const pretes: PhotoPreparee[] = []
+      for (let i = 0; i < nb; i++) pretes.push(await obtenirPhoto(a.sources[i], 'choix', `photo de la proposition ${i + 1}`, budget))
+      const chemins: string[] = []
+      try {
+        for (const p of pretes) chemins.push(await deposerPhoto(ctx, p))
+        await ecrirePhotos(ctx, cible, a.quiz_id, { ...maj, images_choix: chemins })
+      } catch (e) {
+        await supprimerFichiers(ctx, chemins)
+        throw e
+      }
+      await supprimerSiInutilisee(ctx, cible.images_choix ?? [])
+      await toucherQuiz(ctx, a.quiz_id)
+      return {
+        resultat: `${nb} photos de propositions enregistrées pour la question ${a.numero}.${maj.choix ? ' Les textes des propositions ont été remplacés par les légendes.' : ''}`,
+        photos: pretes.map((p, i) => ({ proposition: i + 1, ...decrire(p, chemins[i]) })),
+        lien_edition: lienQuiz(a.quiz_id),
+      }
+    }),
+  )
+
+  // 4i. retirer_photos_propositions
+  serveur.registerTool(
+    'retirer_photos_propositions',
+    {
+      title: 'Retirer les photos des propositions',
+      description: "Retire les photos de toutes les propositions d'une question (les textes des propositions sont conservés).",
+      inputSchema: { quiz_id: idQuiz, numero: z.number().int().describe('Numéro de la question (à partir de 1).') },
+      annotations: { ...ecriture, idempotentHint: true },
+    },
+    outil(ctx, async (a: { quiz_id: string; numero: number }) => {
+      await chargerQuiz(ctx, a.quiz_id)
+      const cible = trouverQuestion(await chargerQuestions(ctx, a.quiz_id), a.numero)
+      if (!cible.images_choix) return { resultat: `Les propositions de la question ${a.numero} n'ont pas de photos : rien à retirer.` }
+      await ecrirePhotos(ctx, cible, a.quiz_id, { images_choix: null })
+      await supprimerSiInutilisee(ctx, cible.images_choix)
+      await toucherQuiz(ctx, a.quiz_id)
+      return { resultat: `Photos des propositions retirées de la question ${a.numero}.` }
     }),
   )
 
@@ -734,7 +980,7 @@ Deno.serve(async (req) => {
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // mode sans état
     enableJsonResponse: true, // réponse JSON simple plutôt qu'un flux SSE : suffisant, sans état à garder
-    maxRequestBodySize: 1_000_000,
+    maxRequestBodySize: 9_000_000, // photos en base64 : 6 Mo décodés ≈ 8 Mo de texte
   })
   await serveur.connect(transport)
   try {
