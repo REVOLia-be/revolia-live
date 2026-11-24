@@ -102,7 +102,7 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
               Question {numero} <span className="font-normal text-discret">/ {etat.nb_questions}</span>
             </span>
             {enQuestion && secondes !== null && secondes > 0 && (
-              <span role="timer" aria-label="Secondes restantes" className="rounded-pilule border-2 border-vert px-3 text-lg font-bold tabular-nums">
+              <span role="timer" aria-label="Secondes restantes" className="min-w-[3.5ch] shrink-0 rounded-pilule border-2 border-vert px-3 text-center text-lg font-bold tabular-nums">
                 {secondes}
               </span>
             )}
@@ -127,7 +127,7 @@ function Partie({ sessionId, code }: { sessionId: string; code: string }) {
           <JaugeCollective jauge={etat.jauge} variante="fine" />
         </div>
         {numero === undefined && enQuestion && secondes !== null && secondes > 0 && (
-          <span role="timer" aria-label="Secondes restantes" className="rounded-pilule border-2 border-vert px-3 text-xl font-bold tabular-nums">
+          <span role="timer" aria-label="Secondes restantes" className="min-w-[3.5ch] shrink-0 rounded-pilule border-2 border-vert px-3 text-center text-xl font-bold tabular-nums">
             {secondes}
           </span>
         )}

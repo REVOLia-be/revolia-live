@@ -107,7 +107,7 @@ export default function EcranQuestion({ etat, secondes, enCours, erreur, onArret
             <p
               role="timer"
               aria-label="Secondes restantes"
-              className="font-titre text-[2.6em] font-normal leading-none tabular-nums text-vertClair"
+              className="min-w-[2em] shrink-0 text-right font-titre text-[2.6em] font-normal leading-none tabular-nums text-vertClair"
             >
               {secondes ?? ''}
             </p>
