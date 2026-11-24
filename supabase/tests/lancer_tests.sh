@@ -16,4 +16,5 @@ psql -v ON_ERROR_STOP=1 -d "$BASE" -f 30_admin.sql
 psql -v ON_ERROR_STOP=1 -d "$BASE" -f 40_photos.sql
 psql -v ON_ERROR_STOP=1 -d "$BASE" -f 50_ateliers.sql
 psql -v ON_ERROR_STOP=1 -d "$BASE" -f 60_code_permanent_reponses_multiples.sql
+psql -v ON_ERROR_STOP=1 -d "$BASE" -f 70_rapport_email.sql
 echo "✅ Tous les tests SQL sont passés."
